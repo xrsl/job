@@ -1,0 +1,21 @@
+[project]
+name = "job"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "beautifulsoup4>=4.14.3",
+  "playwright>=1.57.0",
+  "pydantic>=2.12.5",
+  "pydantic-ai>=1.44.0",
+  "requests>=2.32.5",
+  "sqlmodel>=0.0.31",
+  "typer>=0.21.1",
+]
+
+[project.scripts]
+job = "job.main:app"
+
+[tool.uv]
+package = true
