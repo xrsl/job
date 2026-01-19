@@ -1,3 +1,5 @@
+#:schema schema/schema.json
+
 # Job Search Configuration
 # =========================
 # Configure career pages to monitor and keywords to search for.
@@ -27,8 +29,12 @@ company = "Novo Nordisk"
 link = "https://www.novonordisk.com/careers/find-a-job/career-search-results.html?searchText=&countries=Denmark&categories="
 
 [[job.search.in]]
-company = "Maersk"
-link = "https://www.maersk.com/careers/job-search"
+company = "Novonesis"
+link = "https://www.novonesis.com/en/careers/jobs?country=Denmark#open-positions"
+
+[[job.search.in]]
+company = "Leo"
+link = "https://jobs.leo-pharma.com/search/?createNewAlert=false&q=&locationsearch=denmark&optionsFacetsDD_department=&optionsFacetsDD_city=&optionsFacetsDD_customfield3="
 
 [[job.search.in]]
 company = "Spotify"

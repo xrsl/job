@@ -42,3 +42,17 @@ clean:
     rm -rf job.egg-info
     find . -type d -name "__pycache__" -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
+
+# Generate JSON schema from CUE
+schema:
+    cue def schema/schema.cue --out jsonschema > schema/schema.json
+    @echo "✅ schema.json regenerated"
+    @cat schema/schema.json | schema/order-schema.sh > schema/schema.json.tmp \
+    && mv schema/schema.json.tmp schema/schema.json
+    @echo "✅ schema.json keys successfully ordered"
+# schema:
+#     @echo "🔍 Formatting schema.cue..."
+#     @cue fmt schema/schema.cue
+#     @echo "🔄 Regenerating schema.json from CUE..."
+#     @cd schema && cue export --out jsonschema -e '#JobSearch' schema.cue > schema.json
+#     @echo "✅ schema.json regenerated"

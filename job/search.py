@@ -49,7 +49,7 @@ class PageScanResult:
         return [m.keyword for m in self.matches if m.count > 0]
 
 
-def extract_context(text: str, keyword: str, max_snippets: int = 2) -> list[str]:
+def extract_context(text: str, keyword: str, max_snippets: int = 1000) -> list[str]:
     """Extract context snippets around keyword matches."""
     snippets = []
     pattern = re.compile(rf".{{0,40}}\b{re.escape(keyword)}\b.{{0,40}}", re.IGNORECASE)

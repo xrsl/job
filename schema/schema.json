@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "#CareerPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "company": {
+          "type": "string"
+        },
+        "link": {
+          "type": "string"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "company",
+        "link"
+      ],
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobSearch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "in": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/#CareerPage"
+          }
+        }
+      },
+      "x-tombi-table-keys-order": "schema"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "job": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "$ref": "#/$defs/#JobSearch"
+        }
+      }
+    }
+  }
+}
