@@ -38,5 +38,7 @@ fix:
 # Clean up common temporary files
 clean:
     rm -rf __pycache__
+    rm -rf .ruff_cache
+    rm -rf job.egg-info
     find . -type d -name "__pycache__" -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
