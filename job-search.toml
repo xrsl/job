@@ -1,0 +1,58 @@
+# Job Search Configuration
+# =========================
+# Configure career pages to monitor and keywords to search for.
+
+# Keywords to search for across all pages.
+# These can be overridden per-page with the 'keywords' field.
+[job.search]
+keywords = [
+  "python",
+  "backend",
+  "engineer",
+  "senior",
+  "machine learning",
+  "platform",
+]
+
+# Each [[job.search.in]] entry defines a career page to scan.
+# Required fields:
+#   - company: Human-readable name for the company
+#   - link: URL to the careers/jobs page
+# Optional fields:
+#   - keywords: Custom keywords for this page (overrides defaults)
+#   - enabled: Set to false to skip this page (default: true)
+
+[[job.search.in]]
+company = "Novo Nordisk"
+link = "https://www.novonordisk.com/careers/find-a-job/career-search-results.html?searchText=&countries=Denmark&categories="
+
+[[job.search.in]]
+company = "Maersk"
+link = "https://www.maersk.com/careers/job-search"
+
+[[job.search.in]]
+company = "Spotify"
+link = "https://www.lifeatspotify.com/jobs"
+
+[[job.search.in]]
+company = "Stripe"
+link = "https://stripe.com/jobs/search"
+
+[[job.search.in]]
+company = "Linear"
+link = "https://linear.app/careers"
+
+[[job.search.in]]
+company = "Anthropic"
+link = "https://www.anthropic.com/careers"
+
+[[job.search.in]]
+company = "Vercel"
+link = "https://vercel.com/careers"
+
+# Example of page-specific keywords:
+# [[job.search.in]]
+# company = "Example Corp"
+# link = "https://example.com/careers"
+# keywords = ["frontend", "react", "typescript"]
+# enabled = false
