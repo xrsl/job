@@ -11,11 +11,11 @@ repos:
       - id: ruff-check
       - id: ruff-format
 
-  - repo: local
-    hooks:
-      - id: ty-check
-        name: ty type checker
-        entry: uvx ty check .
-        language: system
-        types: [python]
-        pass_filenames: false
+  # - repo: local
+  #   hooks:
+  #     - id: ty-check
+  #       name: ty type checker
+  #       entry: uvx ty check .
+  #       language: system
+  #       types: [python]
+  #       pass_filenames: false

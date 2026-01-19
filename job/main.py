@@ -46,11 +46,6 @@ def error(message: str) -> None:
     typer.echo(f"Error: {message}", err=True)
 
 
-# -------------------------
-# AI Agent
-# -------------------------
-
-
 @lru_cache(maxsize=4)
 def create_agent(model: str, system_prompt: str) -> Agent:
     """Create and cache an AI agent for the given model."""
@@ -61,9 +56,6 @@ def create_agent(model: str, system_prompt: str) -> Agent:
     )
 
 
-# -------------------------
-# Validation
-# -------------------------
 def validate_url(url: str) -> str:
     """Validate and normalize a URL. Raises typer.Exit on invalid URL."""
     url = url.strip()
@@ -90,9 +82,6 @@ def validate_url(url: str) -> str:
         raise typer.Exit(1)
 
 
-# -------------------------
-# Fetching Strategy
-# -------------------------
 def fetch_job_text(url: str, ctx: AppContext) -> str:
     """Fetch job posting text, using browser if needed for JS-rendered content."""
     static_fetcher = StaticFetcher(
@@ -137,11 +126,6 @@ def extract_job_info(url: str, job_text: str, ctx: AppContext) -> JobAdBase:
         raise typer.Exit(1)
 
 
-# -------------------------
-# CLI
-# -------------------------
-
-
 def version_option_callback(value: bool):
     if value:
         print(job_version)
@@ -177,13 +161,16 @@ def add(
     url: str = typer.Option(
         None, "--url", "-u", help="Job posting URL (takes precedence)"
     ),
-    model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
-    no_cache: bool = typer.Option(
-        False, "--no-cache", help="Bypass cache and always call the AI agent"
+    structured: bool = typer.Option(
+        False, "--structured", "-s", help="Use AI to extract structured fields"
     ),
+    model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
 ) -> None:
     """
-    Add a job ad. Full job text is scraped and stored in the database.
+    Add a job ad. Fetches the job posting and stores it in the database.
+
+    By default, saves the raw fetched content to the job_ad field.
+    Use --structured to extract structured fields (title, company, etc.) via AI.
     """
     app_ctx: AppContext = ctx.obj
     if model:
@@ -207,7 +194,7 @@ def add(
             select(JobAd).where(JobAd.job_posting == final_url)
         ).first()
 
-        if existing and not no_cache:
+        if existing:
             typer.echo("Job already exists in database:")
             typer.echo(existing.model_dump_json(indent=2))
             return
@@ -215,14 +202,26 @@ def add(
     job_text = fetch_job_text(final_url, app_ctx)
     app_ctx.logger.debug(f"Fetched {len(job_text)} characters of job text")
 
-    job_info = extract_job_info(final_url, job_text, app_ctx)
-
-    # Convert AI output to database model, ensuring job_posting is the URL
-    job_data = job_info.model_dump()
-    job_data["job_posting"] = final_url  # Always use the actual URL
+    if structured:
+        # Use AI to extract structured fields
+        job_info = extract_job_info(final_url, job_text, app_ctx)
+        job_data = job_info.model_dump()
+        job_data["job_posting"] = final_url  # Always use the actual URL
+    else:
+        # Save raw content without AI extraction
+        job_data = {
+            "job_posting": final_url,
+            "title": "",
+            "company": "",
+            "location": "",
+            "deadline": "",
+            "department": "",
+            "hiring_manager": "",
+            "job_ad": job_text,
+        }
 
     with Session(app_ctx.engine) as session:
-        if existing and no_cache:
+        if existing:
             # Update existing entry
             for key, value in job_data.items():
                 setattr(existing, key, value)
@@ -245,10 +244,19 @@ def add(
 def update(
     ctx: typer.Context,
     url_arg: str = typer.Argument(..., help="Job posting URL to update"),
+    url: str = typer.Option(
+        None, "--url", "-u", help="Job posting URL (takes precedence)"
+    ),
+    structured: bool = typer.Option(
+        False, "--structured", "-s", help="Use AI to extract structured fields"
+    ),
     model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
 ) -> None:
     """
-    Update an existing job ad by re-fetching and re-extracting.
+    Update an existing job ad by re-fetching.
+
+    By default, saves the raw fetched content to the job_ad field.
+    Use --structured to extract structured fields (title, company, etc.) via AI.
     """
     app_ctx: AppContext = ctx.obj
     if model:
@@ -256,7 +264,12 @@ def update(
             config=Config.from_env(verbose=app_ctx.config.verbose, model=model)
         )
 
-    final_url = validate_url(url_arg)
+    final_url = url or url_arg
+    if not final_url:
+        error("URL is required.")
+        raise typer.Exit(1)
+
+    final_url = validate_url(final_url)
     app_ctx.logger.debug(f"Updating job: {final_url}")
 
     with Session(app_ctx.engine) as session:
@@ -268,11 +281,26 @@ def update(
             error(f"No job found with URL: {final_url}")
             raise typer.Exit(1)
 
-    # Re-fetch and update
+    # Re-fetch
     job_text = fetch_job_text(final_url, app_ctx)
-    job_info = extract_job_info(final_url, job_text, app_ctx)
-    job_data = job_info.model_dump()
-    job_data["job_posting"] = final_url
+
+    if structured:
+        # Use AI to extract structured fields
+        job_info = extract_job_info(final_url, job_text, app_ctx)
+        job_data = job_info.model_dump()
+        job_data["job_posting"] = final_url
+    else:
+        # Save raw content without AI extraction
+        job_data = {
+            "job_posting": final_url,
+            "title": "",
+            "company": "",
+            "location": "",
+            "deadline": "",
+            "department": "",
+            "hiring_manager": "",
+            "job_ad": job_text,
+        }
 
     with Session(app_ctx.engine) as session:
         existing = session.exec(
