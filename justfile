@@ -55,6 +55,7 @@ schema:
 
 alias b := build
 build:
+    rm -rf dist
     uv build --sdist --wheel --out-dir dist
     @echo "✅ built wheel and source distribution"
 
