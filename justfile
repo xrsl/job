@@ -5,10 +5,6 @@ setup:
     uv sync
     uv run playwright install
 
-# Run the job CLI
-run *args:
-    uv run job {{args}}
-
 # Search career pages: just search [company] [keyword]
 # - just search              → all companies, all TOML keywords
 # - just search novo         → filter to Novo, all TOML keywords
@@ -23,6 +19,11 @@ search company="" keyword="":
         uv run job search --company "{{company}}" --keyword "{{keyword}}"; \
     fi
 
+# Run pre-commit checks
+alias p := prek
+prek:
+    prek run --all-files
+
 # Format code using Ruff
 fmt:
     uvx ruff format .
@@ -31,15 +32,16 @@ fmt:
 lint:
     uvx ruff check .
 
-# Fix linting issues using Ruff
-fix:
-    uvx ruff check --fix .
+# Type check code using ty
+type:
+    uvx ty check .
 
 # Clean up common temporary files
 clean:
     rm -rf __pycache__
     rm -rf .ruff_cache
     rm -rf job.egg-info
+    rm -rf dist
     find . -type d -name "__pycache__" -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
 
