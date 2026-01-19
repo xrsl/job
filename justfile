@@ -67,3 +67,7 @@ install: build
 uninstall:
     uv tool uninstall job
     @echo "✅ uninstalled job CLI tool"
+
+alias r := release
+release type:
+    bump-my-version bump {{type}}

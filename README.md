@@ -13,12 +13,6 @@ uv tool install github:xrsl/job@v0.1.0
 
 ```
 
-Or download the latest `.whl` file from [GitHub Releases](https://github.com/xrsl/job/releases) and run:
-
-```bash
-uv tool install job-*.whl
-```
-
 ## Quick Start
 
 ### Job Search (Discovery)
