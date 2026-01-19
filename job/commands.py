@@ -6,7 +6,7 @@ from io import StringIO
 from typing import Sequence
 
 import typer
-from sqlmodel import Session, desc, select
+from sqlmodel import Session, col, desc, select
 
 from job.main import JobAd, app, error, get_engine, log, validate_url
 
@@ -106,11 +106,11 @@ def find(
         jobs = session.exec(
             select(JobAd)
             .where(
-                (JobAd.title.ilike(q))
-                | (JobAd.company.ilike(q))
-                | (JobAd.department.ilike(q))
-                | (JobAd.location.ilike(q))
-                | (JobAd.job_ad.ilike(q))
+                (col(JobAd.title).ilike(q))
+                | (col(JobAd.company).ilike(q))
+                | (col(JobAd.department).ilike(q))
+                | (col(JobAd.location).ilike(q))
+                | (col(JobAd.job_ad).ilike(q))
             )
             .order_by(desc(JobAd.id))
         ).all()
@@ -147,11 +147,11 @@ def export(
         if query:
             q = f"%{query.lower()}%"
             stmt = stmt.where(
-                (JobAd.title.ilike(q))
-                | (JobAd.company.ilike(q))
-                | (JobAd.department.ilike(q))
-                | (JobAd.location.ilike(q))
-                | (JobAd.job_ad.ilike(q))
+                (col(JobAd.title).ilike(q))
+                | (col(JobAd.company).ilike(q))
+                | (col(JobAd.department).ilike(q))
+                | (col(JobAd.location).ilike(q))
+                | (col(JobAd.job_ad).ilike(q))
             )
 
         jobs = session.exec(stmt).all()

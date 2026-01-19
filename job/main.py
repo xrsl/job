@@ -356,6 +356,7 @@ def update(
         existing = session.exec(
             select(JobAd).where(JobAd.job_posting == final_url)
         ).first()
+        assert existing is not None  # Already validated above
         for key, value in job_data.items():
             setattr(existing, key, value)
         session.add(existing)

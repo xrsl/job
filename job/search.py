@@ -2,13 +2,14 @@
 """
 Career page scanning functionality.
 """
+
 import re
 from dataclasses import dataclass, field
 from typing import Iterator
 
 import typer
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
+
 from rich.table import Table
 
 from job.main import _fetch_with_playwright, _fetch_with_requests, app, error, log
@@ -77,14 +78,16 @@ def search_keywords(text: str, keywords: list[str]) -> list[SearchMatch]:
 
         if count > 0:
             context = extract_context(text, keyword)
-            matches.append(SearchMatch(keyword=keyword, count=count, context_snippets=context))
+            matches.append(
+                SearchMatch(keyword=keyword, count=count, context_snippets=context)
+            )
 
     return sorted(matches, key=lambda m: m.count, reverse=True)
 
 
 def fetch_page_content(page: CareerPage, no_js: bool = False) -> str:
     """Fetch content from a career page.
-    
+
     Args:
         page: The career page to fetch
         no_js: If True, use static fetch (faster but may miss JS-loaded content)
@@ -96,7 +99,7 @@ def fetch_page_content(page: CareerPage, no_js: bool = False) -> str:
         if text:
             log(f"[{page.company}] Got {len(text)} chars from static fetch")
         return text
-    
+
     # Browser fetch - slower but gets JS-rendered content
     log(f"[{page.company}] Fetching with browser...")
     try:
@@ -113,7 +116,9 @@ def fetch_page_content(page: CareerPage, no_js: bool = False) -> str:
         return text
 
 
-def scan_page(page: CareerPage, keywords: list[str], no_js: bool = False) -> PageScanResult:
+def scan_page(
+    page: CareerPage, keywords: list[str], no_js: bool = False
+) -> PageScanResult:
     """Scan a single career page for keywords."""
     try:
         content = fetch_page_content(page, no_js=no_js)
@@ -175,18 +180,21 @@ def display_results(results: list[PageScanResult], verbose: bool = False) -> Non
     console.print()
     console.print(table)
 
-    # Detailed results for pages with matches
+    # Detailed verbose output
     interesting_results = [r for r in results if r.success and r.total_matches > 0]
-
     if interesting_results and verbose:
         console.print()
-        console.print("[bold]📋 Detailed Matches[/bold]")
+        console.print("[bold]🔎 Detailed Matches[/bold]")
         console.print()
 
         for result in interesting_results:
-            console.print(f"[bold cyan]{result.page.company}[/bold cyan] ({result.page.link})")
+            console.print(
+                f"[bold cyan]{result.page.company}[/bold cyan] ({result.page.link})"
+            )
             for match in result.matches:
-                console.print(f"  • [yellow]{match.keyword}[/yellow]: {match.count} occurrences")
+                console.print(
+                    f"  • [yellow]{match.keyword}[/yellow]: {match.count} occurrences"
+                )
                 for snippet in match.context_snippets:
                     console.print(f"    [dim]{snippet}[/dim]")
             console.print()
@@ -201,14 +209,27 @@ def search_pages(
         None, "--config", "-c", help="Path to job-search.toml config file"
     ),
     keywords: list[str] = typer.Option(
-        None, "--keyword", "-k", help="Additional keywords to search (can be repeated)"
+        None,
+        "--keyword",
+        "-k",
+        help="Keywords to search (replaces defaults, can be repeated)",
     ),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed match context"),
+    extra_keywords: list[str] = typer.Option(
+        None,
+        "--extra",
+        "-e",
+        help="Additional keywords to append to defaults (can be repeated)",
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed match context"
+    ),
     companies: list[str] = typer.Option(
         None, "--company", help="Search only these companies (can be repeated)"
     ),
     no_js: bool = typer.Option(
-        False, "--no-js", help="Fast mode: skip JavaScript rendering (may miss dynamic content)"
+        False,
+        "--no-js",
+        help="Fast mode: skip JavaScript rendering (may miss dynamic content)",
     ),
 ) -> None:
     """
@@ -228,14 +249,17 @@ def search_pages(
         error(str(e))
         raise typer.Exit(1)
 
-    # Add CLI keywords to defaults
+    # Handle keywords: --keyword replaces defaults, --extra appends
     if keywords:
-        config.default_keywords.extend(keywords)
+        config.default_keywords = list(keywords)
+    if extra_keywords:
+        config.default_keywords.extend(extra_keywords)
 
     # Filter to specific pages if requested
     if companies:
         matching_pages = [
-            p for p in config.enabled_pages
+            p
+            for p in config.enabled_pages
             if any(c.lower() in p.company.lower() for c in companies)
         ]
         if not matching_pages:
@@ -250,27 +274,42 @@ def search_pages(
         error("No pages configured in job-search.toml")
         raise typer.Exit(1)
 
+    # Show what we're searching
     console.print(f"[dim]Config: {config.config_path}[/dim]")
-    console.print(f"[dim]Searching {len(config.enabled_pages)} page(s)...[/dim]")
+    company_names = ", ".join(p.company for p in config.enabled_pages)
+    console.print(f"[bold]Companies:[/bold] {company_names}")
+    keywords_str = ", ".join(config.default_keywords) or "[dim](none)[/dim]"
+    console.print(f"[bold]Keywords:[/bold] {keywords_str}")
     console.print()
 
-    # Scan with progress
+    # Scan pages
     results = []
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Searching...", total=len(config.enabled_pages))
+    total_pages = len(config.enabled_pages)
 
-        for page in config.enabled_pages:
-            progress.update(task, description=f"Searching in {page.company}...")
+    for i, page in enumerate(config.enabled_pages, 1):
+        with console.status(
+            f"[bold]Searching in {page.company}...[/bold] ({i}/{total_pages})"
+        ):
             page_keywords = config.get_keywords_for_page(page)
             result = scan_page(page, page_keywords, no_js=no_js)
             results.append(result)
-            progress.advance(task)
+
+        # Print matches after fetching
+        positions_found = 0
+        for match in result.matches:
+            for snippet in match.context_snippets:
+                positions_found += 1
+                clean_snippet = snippet.strip(".")
+                console.print(
+                    f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
+                    f"in [link={page.link}][cyan]{clean_snippet}[/cyan][/link]"
+                )
+        if positions_found > 0:
+            console.print(
+                f"  [bold]{positions_found} position(s) found in {page.company}[/bold]"
+            )
+        elif result.success:
+            console.print(f"  [dim]No matches in {page.company}[/dim]")
 
     # Display results
     display_results(results, verbose=verbose)

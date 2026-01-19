@@ -156,4 +156,3 @@ just run add https://example.com/job
 By default, the database is stored at `~/.local/share/job/jobs.db` (XDG-compliant).
 
 You can override this with the `JOB_DB_PATH` environment variable.
-

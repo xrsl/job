@@ -9,6 +9,20 @@ setup:
 run *args:
     uv run job {{args}}
 
+# Search career pages: just search [company] [keyword]
+# - just search              → all companies, all TOML keywords
+# - just search novo         → filter to Novo, all TOML keywords
+# - just search novo python  → filter to Novo, only search "python"
+alias s := search
+search company="" keyword="":
+    @if [ -z "{{company}}" ]; then \
+        uv run job search; \
+    elif [ -z "{{keyword}}" ]; then \
+        uv run job search --company "{{company}}"; \
+    else \
+        uv run job search --company "{{company}}" --keyword "{{keyword}}"; \
+    fi
+
 # Format code using Ruff
 fmt:
     uvx ruff format .

@@ -2,6 +2,7 @@
 """
 TOML-based configuration for job search career pages.
 """
+
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,7 +10,7 @@ from pathlib import Path
 try:
     import tomllib  # Python 3.11+
 except ImportError:
-    import tomli as tomllib  # type: ignore
+    import tomli as tomllib
 
 
 @dataclass
@@ -113,7 +114,9 @@ def load_config(config_path: Path | None = None) -> SearchConfig:
         if "company" not in page_data:
             raise ValueError(f"Page {i + 1} missing required field 'company'")
         if "link" not in page_data:
-            raise ValueError(f"Page '{page_data['company']}' missing required field 'link'")
+            raise ValueError(
+                f"Page '{page_data['company']}' missing required field 'link'"
+            )
 
         pages.append(
             CareerPage(
