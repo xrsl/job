@@ -7,7 +7,7 @@ This directory contains the JSON Schema for `job-search.toml`.
 Add this to the top of your `job-search.toml`:
 
 ```toml
-#:schema https://raw.githubusercontent.com/xrsl/job/v0.1.0/schema/schema.json
+#:schema https://raw.githubusercontent.com/xrsl/job/v0.2.0/schema/schema.json
 ```
 
 ## Schema Versions
