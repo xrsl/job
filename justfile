@@ -51,6 +51,7 @@ schema:
     && mv schema/schema.json.tmp schema/schema.json
     @echo "✅ schema.json keys successfully ordered"
 
+alias b := build
 build:
     uv build --sdist --wheel --out-dir dist
     @echo "✅ built wheel and source distribution"

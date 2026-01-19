@@ -22,5 +22,6 @@ job = "job.main:app"
 [tool.uv]
 package = true
 
-[tool.setuptools]
-packages = ["job"]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
