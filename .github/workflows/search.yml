@@ -1,0 +1,29 @@
+name: Job Search
+
+on:
+  schedule:
+    # Run at 08:00 UTC every day
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: |
+          uv sync
+        #   uv run playwright install chromium
+
+      - name: Run Job Search
+        run: |
+            uv run job search

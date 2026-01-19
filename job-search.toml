@@ -10,10 +10,8 @@
 keywords = [
   "python",
   "backend",
-  "engineer",
-  "senior",
-  "machine learning",
-  "platform",
+  "developer",
+  "devops",
 ]
 
 # Each [[job.search.in]] entry defines a career page to scan.
@@ -23,18 +21,6 @@ keywords = [
 # Optional fields:
 #   - keywords: Custom keywords for this page (overrides defaults)
 #   - enabled: Set to false to skip this page (default: true)
-
-[[job.search.in]]
-company = "Novo Nordisk"
-link = "https://www.novonordisk.com/careers/find-a-job/career-search-results.html?searchText=&countries=Denmark&categories="
-
-[[job.search.in]]
-company = "Novonesis"
-link = "https://www.novonesis.com/en/careers/jobs?country=Denmark#open-positions"
-
-[[job.search.in]]
-company = "Leo"
-link = "https://jobs.leo-pharma.com/search/?createNewAlert=false&q=&locationsearch=denmark&optionsFacetsDD_department=&optionsFacetsDD_city=&optionsFacetsDD_customfield3="
 
 [[job.search.in]]
 company = "Spotify"
