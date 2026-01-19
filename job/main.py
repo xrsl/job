@@ -1,9 +1,11 @@
 # main.py
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 
 import typer
+
 from dotenv import load_dotenv
 from pydantic import ValidationError
 from pydantic_ai import Agent
@@ -14,7 +16,20 @@ from job.__version__ import __version__ as job_version
 from job.core import AppContext, Config, JobAd, JobAdBase
 from job.fetchers import BrowserFetcher, StaticFetcher
 
-load_dotenv()
+# Load environment variables from multiple locations (first found wins)
+_env_locations = [
+    Path.home() / ".config" / "job" / ".env",  # XDG-style config
+    Path.home() / ".job.env",  # Home directory dotfile
+    Path.cwd() / ".env",  # Current directory (for development)
+]
+
+for _env_path in _env_locations:
+    if _env_path.exists():
+        load_dotenv(_env_path)
+        break
+else:
+    # Fallback: try default behavior (CWD)
+    load_dotenv()
 
 # -------------------------
 # CLI App

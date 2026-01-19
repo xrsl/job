@@ -6,41 +6,39 @@ from io import StringIO
 from typing import Sequence
 
 import typer
+from rich.console import Console
+from rich.table import Table
 from sqlmodel import Session, col, desc, select
 
 from job.core import AppContext, JobAd
 from job.main import app, error, validate_url
 
+console = Console()
+
 
 # -------------------------
 # Table Formatting (DRY)
 # -------------------------
-def format_job_table(jobs: Sequence[JobAd]) -> str:
-    """Format a list of jobs as a table string."""
+def format_job_table(jobs: Sequence[JobAd]) -> None:
+    """Format and print a list of jobs as a colorful Rich table."""
     if not jobs:
-        return ""
+        return
 
-    # Calculate column widths
-    url_w = max(len("URL"), max(len(j.job_posting or "") for j in jobs))
-    title_w = max(len("TITLE"), max(len(j.title or "") for j in jobs))
-    company_w = max(len("COMPANY"), max(len(j.company or "") for j in jobs))
-    location_w = max(len("LOCATION"), max(len(j.location or "") for j in jobs))
+    table = Table(show_header=True, header_style="bold cyan", border_style="dim")
+    table.add_column("Title", style="magenta", no_wrap=False)
+    table.add_column("Company", style="green")
+    table.add_column("URL", style="blue", no_wrap=False)
 
-    lines = []
-    # Header
-    lines.append(
-        f"{'TITLE':<{title_w}}  {'COMPANY':<{company_w}}  "
-        f"{'LOCATION':<{location_w}}  {'URL':<{url_w}}"
-    )
-
-    # Rows
     for job in jobs:
-        lines.append(
-            f"{(job.title or ''):<{title_w}}  {(job.company or ''):<{company_w}}  "
-            f"{(job.location or ''):<{location_w}}  {(job.job_posting or ''):<{url_w}}"
+        table.add_row(
+            job.title or "",
+            job.company or "",
+            f"[link={job.job_posting}]{job.job_posting}[/link]"
+            if job.job_posting
+            else "",
         )
 
-    return "\n".join(lines)
+    console.print(table)
 
 
 # -------------------------
@@ -57,7 +55,7 @@ def list_jobs(ctx: typer.Context) -> None:
         typer.echo("No jobs found.")
         return
 
-    typer.echo(format_job_table(jobs))
+    format_job_table(jobs)
 
 
 @app.command()
@@ -126,7 +124,7 @@ def find(
         return
 
     app_ctx.logger.debug(f"Found {len(jobs)} matching jobs")
-    typer.echo(format_job_table(jobs))
+    format_job_table(jobs)
 
 
 @app.command()
