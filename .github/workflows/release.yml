@@ -8,66 +8,47 @@ on:
 permissions:
   contents: write
 
+
+env:
+  dists-artifact-name: python-package-distributions
+
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
-
-      - name: Set up Python
-        run: uv python install
-
-      - name: Install dependencies
-        run: uv sync
-
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build package
-        run: uv build
+        run: uv build --python 3.14 --python-preference only-managed --sdist --wheel . --out-dir dist
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.dists-artifact-name }}
+          path: dist/*
 
-      - name: Get version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get commits since last tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -n "$PREV_TAG" ]; then
-            CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..HEAD)
-          else
-            CHANGELOG=$(git log --pretty=format:"- %s")
-          fi
-          # Escape for GitHub Actions
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+  release:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.dists-artifact-name }}
+          path: dist/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ steps.version.outputs.VERSION }}
-          body: |
-            ## Changes
-
-            ${{ steps.changelog.outputs.CHANGELOG }}
-
-            ## Installation
-
-            ```bash
-            # Clone and install with uv
-            git clone https://github.com/${{ github.repository }}.git
-            cd job
-            uv sync
-            uv run playwright install
-            ```
-          files: |
-            dist/*
-          draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: dist/*
+          generate_release_notes: true
