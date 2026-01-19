@@ -20,10 +20,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
-        run: |
-          uv sync
-        #   uv run playwright install chromium
+        run: uv sync
 
       - name: Run Job Search
-        run: |
-            uv run job search
+        timeout-minutes: 5
+        run: uv run job search

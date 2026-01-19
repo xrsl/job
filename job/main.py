@@ -15,6 +15,8 @@ from pydantic import ValidationError
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+from job.__version__ import __version__ as job_version
+from typing import Annotated
 
 load_dotenv()
 
@@ -252,11 +254,29 @@ def extract_job_info(url: str, job_text: str, model: str) -> JobAdBase:
 # -------------------------
 # CLI
 # -------------------------
-@app.callback()
+
+
+def version_option_callback(value: bool):
+    if value:
+        print(job_version)
+        raise typer.Exit()
+
+
+version_option = typer.Option(
+    "--version",
+    "-V",
+    callback=version_option_callback,
+    is_eager=True,
+    help="Show version.",
+)
+
+
+@app.callback(epilog="Made with :purple_heart: in [bold blue]Copenhagen[/bold blue].")
 def main(
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose/debug output"
     ),
+    version: Annotated[bool | None, version_option] = None,
 ) -> None:
     """Job CLI - manage job postings."""
     global _verbose
