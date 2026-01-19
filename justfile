@@ -50,9 +50,16 @@ schema:
     @cat schema/schema.json | schema/order-schema.sh > schema/schema.json.tmp \
     && mv schema/schema.json.tmp schema/schema.json
     @echo "✅ schema.json keys successfully ordered"
-# schema:
-#     @echo "🔍 Formatting schema.cue..."
-#     @cue fmt schema/schema.cue
-#     @echo "🔄 Regenerating schema.json from CUE..."
-#     @cd schema && cue export --out jsonschema -e '#JobSearch' schema.cue > schema.json
-#     @echo "✅ schema.json regenerated"
+
+build:
+    uv build --sdist --wheel --out-dir dist
+    @echo "✅ built wheel and source distribution"
+
+alias i := install
+install: build
+    uv tool install dist/*.whl --force
+    @echo "✅ installed job CLI tool"
+
+uninstall:
+    uv tool uninstall job
+    @echo "✅ uninstalled job CLI tool"

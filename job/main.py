@@ -21,7 +21,11 @@ load_dotenv()
 # -------------------------
 # CLI App
 # -------------------------
-app = typer.Typer(invoke_without_command=True, no_args_is_help=True)
+app = typer.Typer(
+    invoke_without_command=True,
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 
 # Global state for verbose mode
 _verbose = False

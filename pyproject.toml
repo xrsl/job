@@ -21,3 +21,6 @@ job = "job.main:app"
 
 [tool.uv]
 package = true
+
+[tool.setuptools]
+packages = ["job"]
