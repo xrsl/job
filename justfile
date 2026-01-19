@@ -1,15 +1,18 @@
 set dotenv-load
+# Default recipe (shows help)
+default:
+    @just --list
 
 # Install dependencies and setup environment
 setup:
     uv sync
     uv run playwright install
 
-# Search career pages: just search [company] [keyword]
+alias s := search
 # - just search              → all companies, all TOML keywords
 # - just search novo         → filter to Novo, all TOML keywords
 # - just search novo python  → filter to Novo, only search "python"
-alias s := search
+# Search career pages: just search [company] [keyword]
 search company="" keyword="":
     @if [ -z "{{company}}" ]; then \
         uv run job search; \
@@ -19,8 +22,8 @@ search company="" keyword="":
         uv run job search --company "{{company}}" --keyword "{{keyword}}"; \
     fi
 
-# Run pre-commit checks
 alias p := prek
+# Run pre-commit checks with prek
 prek:
     prek run --all-files
 
@@ -36,6 +39,7 @@ lint:
 type:
     uvx ty check .
 
+alias c := clean
 # Clean up common temporary files
 clean:
     rm -rf __pycache__
@@ -45,7 +49,7 @@ clean:
     find . -type d -name "__pycache__" -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
 
-# Generate JSON schema from CUE
+# Generate schema/schema.json from schema/schema.cue
 schema:
     cue def schema/schema.cue --out jsonschema > schema/schema.json
     @echo "✅ schema.json regenerated"
@@ -54,20 +58,24 @@ schema:
     @echo "✅ schema.json keys successfully ordered"
 
 alias b := build
+# Build wheel and source distribution at dist/
 build:
     rm -rf dist
     uv build --sdist --wheel --out-dir dist
     @echo "✅ built wheel and source distribution"
 
 alias i := install
+# Install job CLI tool from dist/*.whl
 install: build
     uv tool install dist/*.whl --force
     @echo "✅ installed job CLI tool"
 
+# Uninstall job CLI tool
 uninstall:
     uv tool uninstall job
     @echo "✅ uninstalled job CLI tool"
 
 alias r := release
+# Release new version: just release [major|minor|patch]
 release type:
     bump-my-version bump {{type}}
