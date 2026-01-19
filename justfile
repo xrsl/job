@@ -99,3 +99,6 @@ test:
 # Run tests with coverage report
 test-cov:
     uv run pytest --cov=job --cov-report=term-missing --cov-report=html
+
+
+ci: prek lint fmt type test
