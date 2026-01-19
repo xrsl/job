@@ -1,102 +1,87 @@
 # Job CLI
 
-A command-line tool for managing job postings. Scrapes job ads from URLs and uses AI to extract structured information.
+**AI-powered job hunting automation.** Scrape career pages, extract structured data, track applications.
 
 ## Installation
 
-Install directly from GitHub using `uv`:
-
 ```bash
-# Install from releases
-uv tool install github:xrsl/job # the latest
-uv tool install github:xrsl/job@v0.1.0
-
+uv tool install git+https://github.com/xrsl/job.git
 ```
 
-## Quick Start
+## What It Does
 
-### Job Search (Discovery)
-
-Monitor multiple career pages for keywords you care about.
+**1. Discovery** – Monitor career pages for keywords
 
 ```bash
-# Search all configured pages with default keywords
-job search
+job search --company spotify --keyword "senior backend"
 ```
 
-**Filtering & Customizing:**
+**2. Extraction** – AI extracts structured data from job postings
 
 ```bash
-# Filter by company (fuzzy match)
-job search --company spotify
-
-# Override keywords (replaces defaults)
-job search --company spotify --keyword python
-
-# Append extra keywords to defaults
-job search --extra "rust" --extra "go"
+job add https://spotify.com/careers/backend-engineer
+# → Parses title, location, deadline, full description
 ```
 
-**Real-time Output:**
-The search runs in parallel (where applicable) and shows:
-
-- A spinner while fetching pages.
-- Real-time found positions.
-- Clickable links to the career pages directly in your terminal.
-
-### Job Management (Tracking)
-
-Keep track of interesting positions you find.
+**3. Tracking** – Query and export your job pipeline
 
 ```bash
-# Add a job (scrapes and extracts info via AI)
-job add https://example.com/careers/123
-
-# List your saved jobs
-job list
-
-# Find jobs in your database
 job find "python"
-
-# Show details
-job show https://example.com/careers/123
-
-# Export data
-job export --format json -o my_jobs.json
+job export --format csv -o applications.csv
 ```
 
-## Configuration (`job-search.toml`)
+## Configuration
 
-Configure career pages and default keywords in `job-search.toml`:
+Create `job-search.toml` with schema validation ([tombi VSCode Extension](https://tombi-toml.github.io/tombi/docs/editors/vscode-extension) recommended):
 
 ```toml
-# Default keywords for all pages
-[job.search]
-keywords = ["python", "backend", "engineer", "senior"]
+#:schema https://raw.githubusercontent.com/xrsl/job/v0.1.0/schema/schema.json
 
-# Add a career page
+[job.search]
+keywords = ["python", "backend", "senior"]
+
 [[job.search.in]]
 company = "Spotify"
-link = "https://www.lifeatspotify.com/jobs"
+link = "https://lifeatspotify.com/jobs"
 
-# Page with custom keywords (overrides defaults)
 [[job.search.in]]
 company = "Linear"
 link = "https://linear.app/careers"
-keywords = ["frontend", "react", "typescript"]
-
-# Disabled page
-[[job.search.in]]
-company = "Archived Co"
-link = "..."
-enabled = false
+keywords = ["typescript", "react"]  # Override defaults
+enabled = true  # Set false to disable
 ```
 
-## Environment Variables
+## Environment
 
-| Variable            | Description               | Default                      |
-| ------------------- | ------------------------- | ---------------------------- |
-| `JOB_MODEL`         | AI model for extraction   | `gemini-2.5-flash`           |
-| `JOB_DB_PATH`       | Custom database path      | `~/.local/share/job/jobs.db` |
-| `JOB_SEARCH_CONFIG` | Path to job-search.toml   | `./job-search.toml`          |
-| `GEMINI_API_KEY`    | API key for Gemini models | (required)                   |
+| Variable            | Purpose                  | Default                      |
+| ------------------- | ------------------------ | ---------------------------- |
+| `GEMINI_API_KEY`    | AI extraction (required) | –                            |
+| `JOB_MODEL`         | Model override           | `gemini-2.5-flash`           |
+| `JOB_DB_PATH`       | Database location        | `~/.local/share/job/jobs.db` |
+| `JOB_SEARCH_CONFIG` | Config file path         | `./job-search.toml`          |
+
+## Commands
+
+````bash
+job search [--company NAME] [--keyword KW] [--extra KW]
+job add <url> [--model MODEL] [--no-cache]
+job list
+job find <query>
+job show <url>
+job export [--format json|csv] [-o FILE] [--query FILTER]
+job info
+job rm <url>
+
+## Architecture
+
+**Stack:** Python 3.12+ • Typer • SQLModel • Pydantic AI • Playwright
+
+**Key Design:**
+- Dependency injection with `AppContext`
+- Protocol-based fetching strategy (Strategy pattern)
+- Adaptive fetching (static → browser fallback for JS-heavy pages)
+- Async/concurrent page scanning with `asyncio.gather()`
+- XDG-compliant data storage
+- AI agent caching with `lru_cache`
+- Structured extraction with Pydantic validation
+- Comprehensive test suite (pytest, 37% coverage)

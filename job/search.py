@@ -1,18 +1,19 @@
-# scan.py
+# search.py
 """
-Career page scanning functionality.
+Career page scanning functionality with async support.
 """
 
+import asyncio
 import re
 from dataclasses import dataclass, field
-from typing import Iterator
 
 import typer
 from rich.console import Console
-
 from rich.table import Table
 
-from job.main import _fetch_with_playwright, _fetch_with_requests, app, error, log
+from job.core import AppContext
+from job.fetchers import BrowserFetcher, StaticFetcher
+from job.main import app, error
 from job.search_config import CareerPage, SearchConfig, load_config
 
 console = Console()
@@ -85,43 +86,57 @@ def search_keywords(text: str, keywords: list[str]) -> list[SearchMatch]:
     return sorted(matches, key=lambda m: m.count, reverse=True)
 
 
-def fetch_page_content(page: CareerPage, no_js: bool = False) -> str:
+def fetch_page_content(page: CareerPage, ctx: AppContext, no_js: bool = False) -> str:
     """Fetch content from a career page.
 
     Args:
         page: The career page to fetch
+        ctx: Application context
         no_js: If True, use static fetch (faster but may miss JS-loaded content)
     """
     if no_js:
         # Static fetch - faster but won't get JS-rendered content
-        log(f"[{page.company}] Fetching with static request (--no-js)...")
-        text = _fetch_with_requests(page.link)
+        ctx.logger.debug(f"[{page.company}] Fetching with static request (--no-js)...")
+        static_fetcher = StaticFetcher(
+            timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
+        )
+        text = static_fetcher.fetch(page.link)
         if text:
-            log(f"[{page.company}] Got {len(text)} chars from static fetch")
+            ctx.logger.debug(
+                f"[{page.company}] Got {len(text)} chars from static fetch"
+            )
         return text
 
     # Browser fetch - slower but gets JS-rendered content
-    log(f"[{page.company}] Fetching with browser...")
+    ctx.logger.debug(f"[{page.company}] Fetching with browser...")
     try:
-        text = _fetch_with_playwright(page.link)
-        log(f"[{page.company}] Got {len(text)} chars from browser")
+        browser_fetcher = BrowserFetcher(
+            timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS, logger=ctx.logger
+        )
+        text = browser_fetcher.fetch(page.link)
+        ctx.logger.debug(f"[{page.company}] Got {len(text)} chars from browser")
         return text
     except Exception as e:
-        log(f"[{page.company}] Browser fetch failed: {e}")
+        ctx.logger.warning(f"[{page.company}] Browser fetch failed: {e}")
         # Fall back to static fetch as last resort
-        log(f"[{page.company}] Trying static fetch...")
-        text = _fetch_with_requests(page.link)
+        ctx.logger.debug(f"[{page.company}] Trying static fetch...")
+        static_fetcher = StaticFetcher(
+            timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
+        )
+        text = static_fetcher.fetch(page.link)
         if text:
-            log(f"[{page.company}] Got {len(text)} chars from static fetch")
+            ctx.logger.debug(
+                f"[{page.company}] Got {len(text)} chars from static fetch"
+            )
         return text
 
 
 def scan_page(
-    page: CareerPage, keywords: list[str], no_js: bool = False
+    page: CareerPage, keywords: list[str], ctx: AppContext, no_js: bool = False
 ) -> PageScanResult:
     """Scan a single career page for keywords."""
     try:
-        content = fetch_page_content(page, no_js=no_js)
+        content = fetch_page_content(page, ctx, no_js=no_js)
 
         if not content:
             return PageScanResult(
@@ -147,11 +162,23 @@ def scan_page(
         )
 
 
-def scan_all_pages(config: SearchConfig) -> Iterator[PageScanResult]:
-    """Scan all enabled pages and yield results."""
-    for page in config.enabled_pages:
-        keywords = config.get_keywords_for_page(page)
-        yield scan_page(page, keywords)
+async def scan_page_async(
+    page: CareerPage, keywords: list[str], ctx: AppContext, no_js: bool = False
+) -> PageScanResult:
+    """Async wrapper for scanning a page (runs sync code in executor)."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, scan_page, page, keywords, ctx, no_js)
+
+
+async def scan_all_pages_async(
+    config: SearchConfig, ctx: AppContext, no_js: bool = False
+) -> list[PageScanResult]:
+    """Scan all enabled pages concurrently using asyncio."""
+    tasks = [
+        scan_page_async(page, config.get_keywords_for_page(page), ctx, no_js)
+        for page in config.enabled_pages
+    ]
+    return await asyncio.gather(*tasks)
 
 
 def display_results(results: list[PageScanResult], verbose: bool = False) -> None:
@@ -205,6 +232,7 @@ def display_results(results: list[PageScanResult], verbose: bool = False) -> Non
 # -------------------------
 @app.command(name="search")
 def search_pages(
+    ctx: typer.Context,
     config_path: str = typer.Option(
         None, "--config", "-c", help="Path to job-search.toml config file"
     ),
@@ -231,6 +259,11 @@ def search_pages(
         "--no-js",
         help="Fast mode: skip JavaScript rendering (may miss dynamic content)",
     ),
+    parallel: bool = typer.Option(
+        False,
+        "--parallel",
+        help="Fetch pages in parallel (faster but uses more resources)",
+    ),
 ) -> None:
     """
     Search configured career pages for job keywords.
@@ -238,6 +271,8 @@ def search_pages(
     Reads career pages from job-search.toml and searches for configured keywords.
     """
     from pathlib import Path
+
+    app_ctx: AppContext = ctx.obj
 
     # Load configuration
     try:
@@ -282,34 +317,39 @@ def search_pages(
     console.print(f"[bold]Keywords:[/bold] {keywords_str}")
     console.print()
 
-    # Scan pages
-    results = []
-    total_pages = len(config.enabled_pages)
+    # Scan pages (parallel or sequential)
+    if parallel:
+        console.print("[dim]Fetching pages in parallel...[/dim]")
+        with console.status("[bold]Scanning all pages...[/bold]"):
+            results = asyncio.run(scan_all_pages_async(config, app_ctx, no_js))
+    else:
+        results = []
+        total_pages = len(config.enabled_pages)
 
-    for i, page in enumerate(config.enabled_pages, 1):
-        with console.status(
-            f"[bold]Searching in {page.company}...[/bold] ({i}/{total_pages})"
-        ):
-            page_keywords = config.get_keywords_for_page(page)
-            result = scan_page(page, page_keywords, no_js=no_js)
-            results.append(result)
+        for i, page in enumerate(config.enabled_pages, 1):
+            with console.status(
+                f"[bold]Searching in {page.company}...[/bold] ({i}/{total_pages})"
+            ):
+                page_keywords = config.get_keywords_for_page(page)
+                result = scan_page(page, page_keywords, app_ctx, no_js=no_js)
+                results.append(result)
 
-        # Print matches after fetching
-        positions_found = 0
-        for match in result.matches:
-            for snippet in match.context_snippets:
-                positions_found += 1
-                clean_snippet = snippet.strip(".")
+            # Print matches after fetching
+            positions_found = 0
+            for match in result.matches:
+                for snippet in match.context_snippets:
+                    positions_found += 1
+                    clean_snippet = snippet.strip(".")
+                    console.print(
+                        f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
+                        f"in [link={page.link}][cyan]{clean_snippet}[/cyan][/link]"
+                    )
+            if positions_found > 0:
                 console.print(
-                    f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
-                    f"in [link={page.link}][cyan]{clean_snippet}[/cyan][/link]"
+                    f"  [bold]{positions_found} position(s) found in {page.company}[/bold]"
                 )
-        if positions_found > 0:
-            console.print(
-                f"  [bold]{positions_found} position(s) found in {page.company}[/bold]"
-            )
-        elif result.success:
-            console.print(f"  [dim]No matches in {page.company}[/dim]")
+            elif result.success:
+                console.print(f"  [dim]No matches in {page.company}[/dim]")
 
     # Display results
     display_results(results, verbose=verbose)

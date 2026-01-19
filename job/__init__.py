@@ -3,6 +3,7 @@
 __version__ = "0.1.0"
 __author__ = "xrsl"
 
-from job.main import app, JobAd, JobAdBase
+from job.core import AppContext, Config, JobAd, JobAdBase
+from job.main import app
 
-__all__ = ["app", "JobAd", "JobAdBase", "__version__"]
+__all__ = ["app", "AppContext", "Config", "JobAd", "JobAdBase", "__version__"]

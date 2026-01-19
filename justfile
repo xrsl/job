@@ -23,7 +23,7 @@ search company="" keyword="":
     fi
 
 alias p := prek
-# Run pre-commit checks with prek
+# Run pre-commit checks (includes ruff, ty)
 prek:
     prek run --all-files
 
@@ -57,6 +57,13 @@ schema:
     && mv schema/schema.json.tmp schema/schema.json
     @echo "✅ schema.json keys successfully ordered"
 
+# Format and lint job-search.toml with tombi
+tombi:
+    tombi format job-search.toml
+    tombi lint job-search.toml
+    @echo "✅ job-search.toml formatted and linted"
+
+
 alias b := build
 # Build wheel and source distribution at dist/
 build:
@@ -79,3 +86,12 @@ alias r := release
 # Release new version: just release [major|minor|patch]
 release type:
     bump-my-version bump {{type}}
+
+alias t := test
+# Run tests with pytest
+test:
+    uv run pytest
+
+# Run tests with coverage report
+test-cov:
+    uv run pytest --cov=job --cov-report=term-missing --cov-report=html

@@ -8,7 +8,8 @@ from typing import Sequence
 import typer
 from sqlmodel import Session, col, desc, select
 
-from job.main import JobAd, app, error, get_engine, log, validate_url
+from job.core import AppContext, JobAd
+from job.main import app, error, validate_url
 
 
 # -------------------------
@@ -46,10 +47,10 @@ def format_job_table(jobs: Sequence[JobAd]) -> str:
 # Commands
 # -------------------------
 @app.command(name="list")
-def list_jobs() -> None:
+def list_jobs(ctx: typer.Context) -> None:
     """List all stored job ads."""
-    engine = get_engine()
-    with Session(engine) as session:
+    app_ctx: AppContext = ctx.obj
+    with Session(app_ctx.engine) as session:
         jobs = session.exec(select(JobAd).order_by(desc(JobAd.id))).all()
 
     if not jobs:
@@ -60,12 +61,14 @@ def list_jobs() -> None:
 
 
 @app.command()
-def show(url: str = typer.Argument(..., help="Job posting URL")) -> None:
+def show(
+    ctx: typer.Context, url: str = typer.Argument(..., help="Job posting URL")
+) -> None:
     """Show a single job ad by URL."""
+    app_ctx: AppContext = ctx.obj
     url = validate_url(url)
-    engine = get_engine()
 
-    with Session(engine) as session:
+    with Session(app_ctx.engine) as session:
         job = session.exec(select(JobAd).where(JobAd.job_posting == url)).first()
 
     if not job:
@@ -76,12 +79,14 @@ def show(url: str = typer.Argument(..., help="Job posting URL")) -> None:
 
 
 @app.command()
-def rm(url: str = typer.Argument(..., help="Job posting URL")) -> None:
+def rm(
+    ctx: typer.Context, url: str = typer.Argument(..., help="Job posting URL")
+) -> None:
     """Delete a job ad by URL."""
+    app_ctx: AppContext = ctx.obj
     url = validate_url(url)
-    engine = get_engine()
 
-    with Session(engine) as session:
+    with Session(app_ctx.engine) as session:
         job = session.exec(select(JobAd).where(JobAd.job_posting == url)).first()
         if not job:
             error(f"No job found with url={url}")
@@ -95,14 +100,15 @@ def rm(url: str = typer.Argument(..., help="Job posting URL")) -> None:
 
 @app.command()
 def find(
+    ctx: typer.Context,
     query: str = typer.Argument(..., help="Search keywords"),
 ) -> None:
     """Find jobs in local database by keyword (title, company, department, location, body)."""
+    app_ctx: AppContext = ctx.obj
     q = f"%{query.lower()}%"
-    log(f"Searching for: {query}")
-    engine = get_engine()
+    app_ctx.logger.debug(f"Searching for: {query}")
 
-    with Session(engine) as session:
+    with Session(app_ctx.engine) as session:
         jobs = session.exec(
             select(JobAd)
             .where(
@@ -119,12 +125,13 @@ def find(
         typer.echo("No matching jobs found.")
         return
 
-    log(f"Found {len(jobs)} matching jobs")
+    app_ctx.logger.debug(f"Found {len(jobs)} matching jobs")
     typer.echo(format_job_table(jobs))
 
 
 @app.command()
 def export(
+    ctx: typer.Context,
     format: str = typer.Option(
         "json", "--format", "-f", help="Export format: json or csv"
     ),
@@ -134,14 +141,14 @@ def export(
     query: str = typer.Option(None, "--query", "-q", help="Filter by search query"),
 ) -> None:
     """Export jobs to JSON or CSV format."""
-    engine = get_engine()
+    app_ctx: AppContext = ctx.obj
     format = format.lower()
 
     if format not in ("json", "csv"):
         error(f"Unsupported format: {format}. Use 'json' or 'csv'.")
         raise typer.Exit(1)
 
-    with Session(engine) as session:
+    with Session(app_ctx.engine) as session:
         stmt = select(JobAd).order_by(desc(JobAd.id))
 
         if query:
@@ -160,7 +167,7 @@ def export(
         typer.echo("No jobs to export.")
         return
 
-    log(f"Exporting {len(jobs)} jobs as {format}")
+    app_ctx.logger.debug(f"Exporting {len(jobs)} jobs as {format}")
 
     if format == "json":
         data = [job.model_dump() for job in jobs]
@@ -200,14 +207,12 @@ def export(
 
 
 @app.command()
-def info() -> None:
+def info(ctx: typer.Context) -> None:
     """Show database location and statistics."""
-    from job.main import get_db_path
+    app_ctx: AppContext = ctx.obj
+    db_path = app_ctx.config.db_path
 
-    db_path = get_db_path()
-    engine = get_engine()
-
-    with Session(engine) as session:
+    with Session(app_ctx.engine) as session:
         count = len(session.exec(select(JobAd)).all())
 
     typer.echo(f"Database: {db_path}")
