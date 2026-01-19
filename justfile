@@ -44,8 +44,12 @@ alias c := clean
 clean:
     rm -rf __pycache__
     rm -rf .ruff_cache
-    rm -rf job.egg-info
+    rm -rf .pytest_cache
+    rm -rf htmlcov
+    rm -rf build
     rm -rf dist
+    rm -rf .coverage
+    rm -rf *.egg-info
     find . -type d -name "__pycache__" -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
 
