@@ -498,7 +498,7 @@ def search_pages(
     ),
 ) -> None:
     """
-    Search configured career pages for job keywords.
+    Search configured career pages for job keywords. (Alias: s)
 
     Reads career pages from job-search.toml and searches for configured keywords.
     """

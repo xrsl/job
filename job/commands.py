@@ -44,9 +44,10 @@ def format_job_table(jobs: Sequence[JobAd]) -> None:
 # -------------------------
 # Commands
 # -------------------------
+@app.command(name="ls", hidden=True)
 @app.command(name="list")
 def list_jobs(ctx: typer.Context) -> None:
-    """List all stored job ads."""
+    """List all stored job ads. (Alias: ls)"""
     app_ctx: AppContext = ctx.obj
     with Session(app_ctx.engine) as session:
         jobs = session.exec(select(JobAd).order_by(desc(JobAd.id))).all()
@@ -204,8 +205,8 @@ def export(
             sys.stdout.write("\n")
 
 
-@app.command()
-def info(ctx: typer.Context) -> None:
+@app.command(name="dbinfo")
+def dbinfo(ctx: typer.Context) -> None:
     """Show database location and statistics."""
     app_ctx: AppContext = ctx.obj
     db_path = app_ctx.config.db_path
