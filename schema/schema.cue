@@ -2,7 +2,7 @@ package job
 
 #CareerPage: {
 	company: string
-	link:    string
+	url:     string
 	keywords?: [...string]
 	enabled?: bool | *true
 }

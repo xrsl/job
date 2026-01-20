@@ -234,7 +234,7 @@ def fetch_page_content(page: CareerPage, ctx: AppContext, no_js: bool = False) -
         static_fetcher = StaticFetcher(
             timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
         )
-        text = static_fetcher.fetch(page.link)
+        text = static_fetcher.fetch(page.url)
         if text:
             log.debug("static_fetch_complete", chars=len(text))
         return text
@@ -245,7 +245,7 @@ def fetch_page_content(page: CareerPage, ctx: AppContext, no_js: bool = False) -
         browser_fetcher = BrowserFetcher(
             timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS, logger=ctx.logger
         )
-        text = browser_fetcher.fetch(page.link)
+        text = browser_fetcher.fetch(page.url)
         log.debug("browser_fetch_complete", chars=len(text))
         return text
     except Exception as e:
@@ -255,7 +255,7 @@ def fetch_page_content(page: CareerPage, ctx: AppContext, no_js: bool = False) -
         static_fetcher = StaticFetcher(
             timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
         )
-        text = static_fetcher.fetch(page.link)
+        text = static_fetcher.fetch(page.url)
         if text:
             log.debug("static_fetch_complete", chars=len(text))
         return text
@@ -314,7 +314,7 @@ async def fetch_page_content_async(
         static_fetcher = StaticFetcher(
             timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
         )
-        text = await asyncio.to_thread(static_fetcher.fetch, page.link)
+        text = await asyncio.to_thread(static_fetcher.fetch, page.url)
         if text:
             log.debug("static_fetch_complete", chars=len(text))
         return text
@@ -325,7 +325,7 @@ async def fetch_page_content_async(
         async_fetcher = AsyncBrowserFetcher(
             timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS, logger=ctx.logger
         )
-        text = await async_fetcher.fetch(page.link)
+        text = await async_fetcher.fetch(page.url)
         log.debug("browser_fetch_complete", chars=len(text))
         return text
     except Exception as e:
@@ -335,7 +335,7 @@ async def fetch_page_content_async(
         static_fetcher = StaticFetcher(
             timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
         )
-        text = await asyncio.to_thread(static_fetcher.fetch, page.link)
+        text = await asyncio.to_thread(static_fetcher.fetch, page.url)
         if text:
             log.debug("static_fetch_complete", chars=len(text))
         return text
@@ -427,7 +427,7 @@ def display_results(results: list[PageScanResult], verbose: bool = False) -> Non
 
         for result in interesting_results:
             console.print(
-                f"[bold cyan]{result.page.company}[/bold cyan] ({result.page.link})"
+                f"[bold cyan]{result.page.company}[/bold cyan] ({result.page.url})"
             )
             for match in result.matches:
                 console.print(
@@ -554,7 +554,7 @@ def search_pages(
                     clean_snippet = snippet.strip(".")
                     console.print(
                         f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
-                        f"in [link={page.link}][cyan]{clean_snippet}[/cyan][/link]"
+                        f"in [link={page.url}][cyan]{clean_snippet}[/cyan][/link]"
                     )
             if positions_found > 0:
                 console.print(
@@ -584,7 +584,7 @@ def search_pages(
                     clean_snippet = snippet.strip(".")
                     console.print(
                         f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
-                        f"in [link={page.link}][cyan]{clean_snippet}[/cyan][/link]"
+                        f"in [link={page.url}][cyan]{clean_snippet}[/cyan][/link]"
                     )
             if positions_found > 0:
                 console.print(

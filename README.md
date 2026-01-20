@@ -42,11 +42,11 @@ keywords = ["python", "backend", "senior"]
 
 [[job.search.in]]
 company = "Spotify"
-link = "https://lifeatspotify.com/jobs"
+url = "https://lifeatspotify.com/jobs"
 
 [[job.search.in]]
 company = "Linear"
-link = "https://linear.app/careers"
+url = "https://linear.app/careers"
 keywords = ["typescript", "react"]  # Override defaults
 enabled = true  # Set false to disable
 ```

@@ -8,7 +8,7 @@
         "company": {
           "type": "string"
         },
-        "link": {
+        "url": {
           "type": "string"
         },
         "keywords": {
@@ -21,10 +21,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "company",
-        "link"
-      ],
+      "required": ["company", "url"],
       "x-tombi-table-keys-order": "schema"
     },
     "#JobSearch": {

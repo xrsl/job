@@ -17,34 +17,34 @@ keywords = [
 # Each [[job.search.in]] entry defines a career page to scan.
 # Required fields:
 #   - company: Human-readable name for the company
-#   - link: URL to the careers/jobs page
+#   - url: URL to the careers/jobs page
 # Optional fields:
 #   - keywords: Custom keywords for this page (overrides defaults)
 #   - enabled: Set to false to skip this page (default: true)
 
 [[job.search.in]]
 company = "Spotify"
-link = "https://www.lifeatspotify.com/jobs"
+url = "https://www.lifeatspotify.com/jobs"
 
 [[job.search.in]]
 company = "Stripe"
-link = "https://stripe.com/jobs/search"
+url = "https://stripe.com/jobs/search"
 
 [[job.search.in]]
 company = "Linear"
-link = "https://linear.app/careers"
+url = "https://linear.app/careers"
 
 [[job.search.in]]
 company = "Anthropic"
-link = "https://www.anthropic.com/careers"
+url = "https://www.anthropic.com/careers"
 
 [[job.search.in]]
 company = "Vercel"
-link = "https://vercel.com/careers"
+url = "https://vercel.com/careers"
 
 # Example of page-specific keywords:
 # [[job.search.in]]
 # company = "Example Corp"
-# link = "https://example.com/careers"
+# url = "https://example.com/careers"
 # keywords = ["frontend", "react", "typescript"]
 # enabled = false

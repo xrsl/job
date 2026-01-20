@@ -18,12 +18,12 @@ class CareerPage:
     """A career page to search for job listings."""
 
     company: str
-    link: str
+    url: str
     keywords: list[str] = field(default_factory=list)
     enabled: bool = True
 
     def __str__(self) -> str:
-        return f"{self.company} ({self.link})"
+        return f"{self.company} ({self.url})"
 
 
 @dataclass
@@ -113,15 +113,15 @@ def load_config(config_path: Path | None = None) -> SearchConfig:
     for i, page_data in enumerate(pages_data):
         if "company" not in page_data:
             raise ValueError(f"Page {i + 1} missing required field 'company'")
-        if "link" not in page_data:
+        if "url" not in page_data:
             raise ValueError(
-                f"Page '{page_data['company']}' missing required field 'link'"
+                f"Page '{page_data['company']}' missing required field 'url'"
             )
 
         pages.append(
             CareerPage(
                 company=page_data["company"],
-                link=page_data["link"],
+                url=page_data["url"],
                 keywords=page_data.get("keywords", []),
                 enabled=page_data.get("enabled", True),
             )
