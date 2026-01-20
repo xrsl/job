@@ -1,5 +1,5 @@
 # main.py
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
@@ -46,8 +46,8 @@ def error(message: str) -> None:
     typer.echo(f"Error: {message}", err=True)
 
 
-@lru_cache(maxsize=4)
-def create_agent(model: str, system_prompt: str) -> Agent:
+@cache
+def create_agent(model: str, system_prompt: str) -> Agent[None, JobAdBase]:
     """Create and cache an AI agent for the given model."""
     return Agent(
         model=model,
@@ -126,6 +126,36 @@ def extract_job_info(url: str, job_text: str, ctx: AppContext) -> JobAdBase:
         raise typer.Exit(1)
 
 
+def _build_job_data(url: str, job_text: str, structured: bool, ctx: AppContext) -> dict:
+    """Build job data dict, optionally using AI extraction.
+
+    Args:
+        url: The job posting URL
+        job_text: The fetched job text
+        structured: If True, use AI to extract structured fields
+        ctx: Application context
+
+    Returns:
+        Dict with job data ready for database insertion
+    """
+    if structured:
+        job_info = extract_job_info(url, job_text, ctx)
+        job_data = job_info.model_dump()
+        job_data["job_posting"] = url
+    else:
+        job_data = {
+            "job_posting": url,
+            "title": "",
+            "company": "",
+            "location": "",
+            "deadline": "",
+            "department": "",
+            "hiring_manager": "",
+            "job_ad": job_text,
+        }
+    return job_data
+
+
 def version_option_callback(value: bool):
     if value:
         print(job_version)
@@ -200,25 +230,9 @@ def add(
             return
 
     job_text = fetch_job_text(final_url, app_ctx)
-    app_ctx.logger.debug(f"Fetched {len(job_text)} characters of job text")
+    app_ctx.logger.debug("job_text_fetched", chars=len(job_text))
 
-    if structured:
-        # Use AI to extract structured fields
-        job_info = extract_job_info(final_url, job_text, app_ctx)
-        job_data = job_info.model_dump()
-        job_data["job_posting"] = final_url  # Always use the actual URL
-    else:
-        # Save raw content without AI extraction
-        job_data = {
-            "job_posting": final_url,
-            "title": "",
-            "company": "",
-            "location": "",
-            "deadline": "",
-            "department": "",
-            "hiring_manager": "",
-            "job_ad": job_text,
-        }
+    job_data = _build_job_data(final_url, job_text, structured, app_ctx)
 
     with Session(app_ctx.engine) as session:
         if existing:
@@ -284,23 +298,7 @@ def update(
     # Re-fetch
     job_text = fetch_job_text(final_url, app_ctx)
 
-    if structured:
-        # Use AI to extract structured fields
-        job_info = extract_job_info(final_url, job_text, app_ctx)
-        job_data = job_info.model_dump()
-        job_data["job_posting"] = final_url
-    else:
-        # Save raw content without AI extraction
-        job_data = {
-            "job_posting": final_url,
-            "title": "",
-            "company": "",
-            "location": "",
-            "deadline": "",
-            "department": "",
-            "hiring_manager": "",
-            "job_ad": job_text,
-        }
+    job_data = _build_job_data(final_url, job_text, structured, app_ctx)
 
     with Session(app_ctx.engine) as session:
         existing = session.exec(

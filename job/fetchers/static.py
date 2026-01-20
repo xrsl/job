@@ -1,24 +1,25 @@
 """Static page fetcher using requests."""
 
-import logging
-
 import requests
 from bs4 import BeautifulSoup
+from structlog.typing import FilteringBoundLogger
+
+from job.core.logging import get_logger
 
 
 class StaticFetcher:
     """Fetch page content using requests (for static pages)."""
 
-    def __init__(self, timeout: int = 15, logger: logging.Logger | None = None):
+    def __init__(self, timeout: int = 15, logger: FilteringBoundLogger | None = None):
         """
         Initialize static fetcher.
 
         Args:
             timeout: Request timeout in seconds
-            logger: Optional logger for debug output
+            logger: Optional structlog logger
         """
         self.timeout = timeout
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger()
 
     def fetch(self, url: str) -> str:
         """
@@ -33,17 +34,17 @@ class StaticFetcher:
         Raises:
             requests.RequestException: If the request fails
         """
-        self.logger.debug(f"Fetching with requests: {url}")
+        self.logger.debug("fetching_static", url=url)
         try:
             resp = requests.get(url, timeout=self.timeout)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
             text = soup.get_text(separator="\n", strip=True)
-            self.logger.debug(f"Fetched {len(text)} characters")
+            self.logger.debug("fetch_complete", chars=len(text))
             return text
         except requests.Timeout:
-            self.logger.warning(f"Request timed out after {self.timeout}s")
+            self.logger.warning("request_timeout", timeout_seconds=self.timeout)
             raise
         except requests.RequestException as e:
-            self.logger.error(f"Request failed: {e}")
+            self.logger.error("request_failed", error=str(e))
             raise

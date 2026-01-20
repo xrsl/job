@@ -4,11 +4,30 @@ from typing import Protocol
 
 
 class PageFetcher(Protocol):
-    """Protocol for fetching page content."""
+    """Protocol for synchronous page fetching."""
 
     def fetch(self, url: str) -> str:
         """
         Fetch page content from URL.
+
+        Args:
+            url: The URL to fetch
+
+        Returns:
+            The text content of the page
+
+        Raises:
+            Exception: If fetching fails
+        """
+        ...
+
+
+class AsyncPageFetcher(Protocol):
+    """Protocol for asynchronous page fetching."""
+
+    async def fetch(self, url: str) -> str:
+        """
+        Fetch page content from URL asynchronously.
 
         Args:
             url: The URL to fetch

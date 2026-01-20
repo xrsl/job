@@ -2,6 +2,7 @@
 
 from job.core.config import Config
 from job.core.context import AppContext
+from job.core.logging import get_logger
 from job.core.models import JobAd, JobAdBase
 
-__all__ = ["Config", "AppContext", "JobAd", "JobAdBase"]
+__all__ = ["Config", "AppContext", "JobAd", "JobAdBase", "get_logger"]

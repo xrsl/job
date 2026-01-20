@@ -62,7 +62,7 @@ enabled = true  # Set false to disable
 
 ## Commands
 
-````bash
+```bash
 job search [--company NAME] [--keyword KW] [--extra KW]
 job add <url> [--model MODEL] [--no-cache]
 job list
@@ -71,17 +71,8 @@ job show <url>
 job export [--format json|csv] [-o FILE] [--query FILTER]
 job info
 job rm <url>
+```
 
 ## Architecture
 
-**Stack:** Python 3.12+ • Typer • SQLModel • Pydantic AI • Playwright
-
-**Key Design:**
-- Dependency injection with `AppContext`
-- Protocol-based fetching strategy (Strategy pattern)
-- Adaptive fetching (static → browser fallback for JS-heavy pages)
-- Async/concurrent page scanning with `asyncio.gather()`
-- XDG-compliant data storage
-- AI agent caching with `lru_cache`
-- Structured extraction with Pydantic validation
-- Comprehensive test suite (pytest, 37% coverage)
+**Stack:** Python 3.12+ • Typer • SQLModel • Pydantic AI • Playwright • BeautifulSoup

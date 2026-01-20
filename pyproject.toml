@@ -13,6 +13,7 @@ dependencies = [
   "requests>=2.32.5",
   "rich>=13.9.0",
   "sqlmodel>=0.0.31",
+  "structlog>=24.1.0",
   "tomli>=2.0.0",
   "typer>=0.21.1",
 ]
@@ -79,15 +80,15 @@ exclude_also = [
 ]
 
 [tool.pytest]
-testpaths = ["tests"]
 addopts = [
-  "--strict-markers",
-  "--strict-config",
-  "-ra",
-  "--cov=job",
-  "--cov-report=term-missing",
   "--cov-report=html",
+  "--cov-report=term-missing",
+  "--cov=job",
+  "--strict-config",
+  "--strict-markers",
+  "-ra",
 ]
+testpaths = ["tests"]
 
 [tool.uv]
 package = true

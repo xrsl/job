@@ -1,6 +1,5 @@
 """Tests for page fetchers."""
 
-import logging
 from unittest.mock import Mock, patch
 
 import pytest
@@ -27,11 +26,19 @@ def test_static_fetcher_success():
 
 def test_static_fetcher_timeout():
     """Test static fetcher timeout handling."""
-    fetcher = StaticFetcher(timeout=5, logger=logging.getLogger("test"))
+    # Create mock logger that accepts structlog's keyword arguments
+    mock_logger = Mock()
+    mock_logger.debug = Mock()
+    mock_logger.warning = Mock()
+
+    fetcher = StaticFetcher(timeout=5, logger=mock_logger)
 
     with patch("requests.get", side_effect=requests.Timeout):
         with pytest.raises(requests.Timeout):
             fetcher.fetch("https://example.com")
+
+    # Verify warning was called with structlog-style keyword args
+    mock_logger.warning.assert_called_once_with("request_timeout", timeout_seconds=5)
 
 
 def test_static_fetcher_request_error():
