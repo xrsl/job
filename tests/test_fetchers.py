@@ -20,8 +20,24 @@ def test_static_fetcher_success():
 
         result = fetcher.fetch("https://example.com")
 
-        assert "Test content" in result
+        assert "Test content" in result.content
         mock_get.assert_called_once()
+
+
+def test_static_fetcher_extracts_title():
+    """Test that static fetcher accurately extracts page title."""
+    fetcher = StaticFetcher(timeout=5)
+
+    with patch("requests.get") as mock_get:
+        mock_response = Mock()
+        mock_response.text = "<html><head><title>My Awesome Job</title></head><body>Content</body></html>"
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+
+        result = fetcher.fetch("https://example.com")
+
+        assert result.title == "My Awesome Job"
+        assert result.content == "Content"
 
 
 def test_static_fetcher_timeout():

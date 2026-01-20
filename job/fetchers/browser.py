@@ -8,6 +8,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwrig
 from structlog.typing import FilteringBoundLogger
 
 from job.core.logging import get_logger
+from job.fetchers.base import FetchResult
 
 
 class BrowserFetcher:
@@ -50,7 +51,7 @@ class BrowserFetcher:
             if result.returncode != 0:
                 raise RuntimeError(f"Failed to install browser: {result.stderr}")
 
-    def fetch(self, url: str) -> str:
+    def fetch(self, url: str) -> FetchResult:
         """
         Fetch page content using Playwright.
 
@@ -72,9 +73,10 @@ class BrowserFetcher:
                 page.goto(url, wait_until="networkidle", timeout=self.timeout_ms)
                 page.wait_for_timeout(self.wait_time_ms)
                 text = page.inner_text("body")
+                title = page.title()
                 browser.close()
-                self.logger.debug("fetch_complete", chars=len(text))
-                return text
+                self.logger.debug("fetch_complete", chars=len(text), title=title)
+                return FetchResult(content=text, title=title)
         except PlaywrightTimeout:
             self.logger.error("page_timeout", timeout_ms=self.timeout_ms)
             raise
@@ -104,7 +106,7 @@ class AsyncBrowserFetcher:
         self.wait_time_ms = wait_time_ms
         self.logger = logger or get_logger()
 
-    async def fetch(self, url: str) -> str:
+    async def fetch(self, url: str) -> FetchResult:
         """
         Fetch page content using Playwright async API.
 
@@ -126,9 +128,10 @@ class AsyncBrowserFetcher:
                 await page.goto(url, wait_until="networkidle", timeout=self.timeout_ms)
                 await page.wait_for_timeout(self.wait_time_ms)
                 text = await page.inner_text("body")
+                title = await page.title()
                 await browser.close()
-                self.logger.debug("fetch_complete", chars=len(text))
-                return text
+                self.logger.debug("fetch_complete", chars=len(text), title=title)
+                return FetchResult(content=text, title=title)
         except PlaywrightTimeout:
             self.logger.error("page_timeout", timeout_ms=self.timeout_ms)
             raise

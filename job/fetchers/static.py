@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from structlog.typing import FilteringBoundLogger
 
 from job.core.logging import get_logger
+from job.fetchers.base import FetchResult
 
 
 class StaticFetcher:
@@ -21,7 +22,7 @@ class StaticFetcher:
         self.timeout = timeout
         self.logger = logger or get_logger()
 
-    def fetch(self, url: str) -> str:
+    def fetch(self, url: str) -> FetchResult:
         """
         Fetch page content using requests.
 
@@ -39,9 +40,13 @@ class StaticFetcher:
             resp = requests.get(url, timeout=self.timeout)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
-            text = soup.get_text(separator="\n", strip=True)
-            self.logger.debug("fetch_complete", chars=len(text))
-            return text
+            if soup.body:
+                text = soup.body.get_text(separator="\n", strip=True)
+            else:
+                text = soup.get_text(separator="\n", strip=True)
+            title = soup.title.string if soup.title else None
+            self.logger.debug("fetch_complete", chars=len(text), title=title)
+            return FetchResult(content=text, title=title)
         except requests.Timeout:
             self.logger.warning("request_timeout", timeout_seconds=self.timeout)
             raise

@@ -15,6 +15,7 @@ from sqlmodel import Session, select
 from job.__version__ import __version__ as job_version
 from job.core import AppContext, Config, JobAd, JobAdBase
 from job.fetchers import BrowserFetcher, StaticFetcher
+from job.fetchers.base import FetchResult
 
 # Load environment variables from multiple locations (first found wins)
 _env_locations = [
@@ -82,17 +83,17 @@ def validate_url(url: str) -> str:
         raise typer.Exit(1)
 
 
-def fetch_job_text(url: str, ctx: AppContext) -> str:
+def fetch_job_text(url: str, ctx: AppContext) -> FetchResult:
     """Fetch job posting text, using browser if needed for JS-rendered content."""
     static_fetcher = StaticFetcher(
         timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
     )
 
     try:
-        text = static_fetcher.fetch(url)
-        if len(text) >= ctx.config.MIN_CONTENT_LENGTH:
-            ctx.logger.debug(f"Got {len(text)} chars from static fetch")
-            return text
+        result = static_fetcher.fetch(url)
+        if len(result.content) >= ctx.config.MIN_CONTENT_LENGTH:
+            ctx.logger.debug(f"Got {len(result.content)} chars from static fetch")
+            return result
     except Exception:
         pass
 
@@ -126,26 +127,30 @@ def extract_job_info(url: str, job_text: str, ctx: AppContext) -> JobAdBase:
         raise typer.Exit(1)
 
 
-def _build_job_data(url: str, job_text: str, structured: bool, ctx: AppContext) -> dict:
+def _build_job_data(
+    url: str, fetch_result: FetchResult, structured: bool, ctx: AppContext
+) -> dict:
     """Build job data dict, optionally using AI extraction.
 
     Args:
         url: The job posting URL
-        job_text: The fetched job text
+        fetch_result: The fetched job result including text and title
         structured: If True, use AI to extract structured fields
         ctx: Application context
 
     Returns:
         Dict with job data ready for database insertion
     """
+    job_text = fetch_result.content
     if structured:
         job_info = extract_job_info(url, job_text, ctx)
         job_data = job_info.model_dump()
         job_data["job_posting"] = url
     else:
+        title = fetch_result.title or ""
         job_data = {
             "job_posting": url,
-            "title": "",
+            "title": title,
             "company": "",
             "location": "",
             "deadline": "",
@@ -229,10 +234,10 @@ def add(
             typer.echo(existing.model_dump_json(indent=2))
             return
 
-    job_text = fetch_job_text(final_url, app_ctx)
-    app_ctx.logger.debug("job_text_fetched", chars=len(job_text))
+    fetch_result = fetch_job_text(final_url, app_ctx)
+    app_ctx.logger.debug("job_text_fetched", chars=len(fetch_result.content))
 
-    job_data = _build_job_data(final_url, job_text, structured, app_ctx)
+    job_data = _build_job_data(final_url, fetch_result, structured, app_ctx)
 
     with Session(app_ctx.engine) as session:
         if existing:
@@ -296,9 +301,9 @@ def update(
             raise typer.Exit(1)
 
     # Re-fetch
-    job_text = fetch_job_text(final_url, app_ctx)
+    fetch_result = fetch_job_text(final_url, app_ctx)
 
-    job_data = _build_job_data(final_url, job_text, structured, app_ctx)
+    job_data = _build_job_data(final_url, fetch_result, structured, app_ctx)
 
     with Session(app_ctx.engine) as session:
         existing = session.exec(

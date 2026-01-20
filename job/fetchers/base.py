@@ -1,12 +1,21 @@
 """Base protocol for page fetchers."""
 
+from dataclasses import dataclass
 from typing import Protocol
+
+
+@dataclass
+class FetchResult:
+    """Result of a page fetch operation."""
+
+    content: str
+    title: str | None = None
 
 
 class PageFetcher(Protocol):
     """Protocol for synchronous page fetching."""
 
-    def fetch(self, url: str) -> str:
+    def fetch(self, url: str) -> FetchResult:
         """
         Fetch page content from URL.
 
@@ -14,7 +23,7 @@ class PageFetcher(Protocol):
             url: The URL to fetch
 
         Returns:
-            The text content of the page
+            The fetch result containing content and metadata
 
         Raises:
             Exception: If fetching fails
@@ -25,7 +34,7 @@ class PageFetcher(Protocol):
 class AsyncPageFetcher(Protocol):
     """Protocol for asynchronous page fetching."""
 
-    async def fetch(self, url: str) -> str:
+    async def fetch(self, url: str) -> FetchResult:
         """
         Fetch page content from URL asynchronously.
 
@@ -33,7 +42,7 @@ class AsyncPageFetcher(Protocol):
             url: The URL to fetch
 
         Returns:
-            The text content of the page
+            The fetch result containing content and metadata
 
         Raises:
             Exception: If fetching fails

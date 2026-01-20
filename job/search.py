@@ -234,7 +234,8 @@ def fetch_page_content(page: CareerPage, ctx: AppContext, no_js: bool = False) -
         static_fetcher = StaticFetcher(
             timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
         )
-        text = static_fetcher.fetch(page.url)
+        result = static_fetcher.fetch(page.url)
+        text = result.content
         if text:
             log.debug("static_fetch_complete", chars=len(text))
         return text
@@ -245,7 +246,8 @@ def fetch_page_content(page: CareerPage, ctx: AppContext, no_js: bool = False) -
         browser_fetcher = BrowserFetcher(
             timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS, logger=ctx.logger
         )
-        text = browser_fetcher.fetch(page.url)
+        result = browser_fetcher.fetch(page.url)
+        text = result.content
         log.debug("browser_fetch_complete", chars=len(text))
         return text
     except Exception as e:
@@ -255,7 +257,8 @@ def fetch_page_content(page: CareerPage, ctx: AppContext, no_js: bool = False) -
         static_fetcher = StaticFetcher(
             timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
         )
-        text = static_fetcher.fetch(page.url)
+        result = static_fetcher.fetch(page.url)
+        text = result.content
         if text:
             log.debug("static_fetch_complete", chars=len(text))
         return text
@@ -314,7 +317,12 @@ async def fetch_page_content_async(
         static_fetcher = StaticFetcher(
             timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
         )
-        text = await asyncio.to_thread(static_fetcher.fetch, page.url)
+
+        # Helper to run fetch and get content
+        def _fetch():
+            return static_fetcher.fetch(page.url).content
+
+        text = await asyncio.to_thread(_fetch)
         if text:
             log.debug("static_fetch_complete", chars=len(text))
         return text
@@ -325,7 +333,8 @@ async def fetch_page_content_async(
         async_fetcher = AsyncBrowserFetcher(
             timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS, logger=ctx.logger
         )
-        text = await async_fetcher.fetch(page.url)
+        result = await async_fetcher.fetch(page.url)
+        text = result.content
         log.debug("browser_fetch_complete", chars=len(text))
         return text
     except Exception as e:
@@ -335,7 +344,11 @@ async def fetch_page_content_async(
         static_fetcher = StaticFetcher(
             timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
         )
-        text = await asyncio.to_thread(static_fetcher.fetch, page.url)
+
+        def _fetch():
+            return static_fetcher.fetch(page.url).content
+
+        text = await asyncio.to_thread(_fetch)
         if text:
             log.debug("static_fetch_complete", chars=len(text))
         return text
