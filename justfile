@@ -81,10 +81,43 @@ install: build
     uv tool install dist/*.whl --force
     @echo "✅ installed job CLI tool"
 
+alias gi := git-install
+# Install job CLI tool from git
+git-install:
+    uv tool install git+https://github.com/xrsl/job.git --python 3.12
+    @echo "✅ installed job CLI tool from git"
+
+
 # Uninstall job CLI tool
 uninstall:
     uv tool uninstall job
     @echo "✅ uninstalled job CLI tool"
+
+# Remove ALL job binaries from system (with confirmation)
+rmjob:
+    #!/usr/bin/env zsh
+    setopt pipefail
+    binaries=("${(@f)$(whence -a job 2>/dev/null | sort -u)}")
+    # Filter out empty elements
+    binaries=(${binaries:#})
+    if [[ ${#binaries[@]} -eq 0 ]]; then
+        echo "No job binaries found."
+        uv tool uninstall job 2>/dev/null || true
+        exit 0
+    fi
+    echo "Found job binaries:"
+    for bin in $binaries; do echo "  - $bin"; done
+    echo ""
+    read -q "REPLY?Remove all? [y/N] "
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        for bin in $binaries; do
+            rm -f "$bin" && echo "✅ removed $bin"
+        done
+        uv tool uninstall job 2>/dev/null || true
+    else
+        echo "Aborted."
+    fi
 
 alias r := release
 # Release new version: just release [major|minor|patch]

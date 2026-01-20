@@ -1,10 +1,11 @@
 package job
 
 #CareerPage: {
-	company: string
-	url:     string
-	keywords?: [...string]
-	enabled?: bool | *true
+	company:            string
+	url:                string
+	keywords?:          [...string]
+	"extra-keywords"?:  [...string]
+	enabled?:           bool | *true
 }
 
 #JobSearch: {

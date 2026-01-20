@@ -48,7 +48,11 @@ url = "https://lifeatspotify.com/jobs"
 company = "Linear"
 url = "https://linear.app/careers"
 keywords = ["typescript", "react"]  # Override defaults
-enabled = true  # Set false to disable
+
+[[job.search.in]]
+company = "Stripe"
+url = "https://stripe.com/jobs/search"
+extra-keywords = ["fintech", "payments"]  # Merge with defaults
 ```
 
 ## Environment

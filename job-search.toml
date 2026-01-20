@@ -20,6 +20,7 @@ keywords = [
 #   - url: URL to the careers/jobs page
 # Optional fields:
 #   - keywords: Custom keywords for this page (overrides defaults)
+#   - extra-keywords: Additional keywords (merged with defaults)
 #   - enabled: Set to false to skip this page (default: true)
 
 [[job.search.in]]

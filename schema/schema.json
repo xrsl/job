@@ -19,6 +19,12 @@
         },
         "enabled": {
           "type": "boolean"
+        },
+        "extra-keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [

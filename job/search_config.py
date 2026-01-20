@@ -20,6 +20,7 @@ class CareerPage:
     company: str
     url: str
     keywords: list[str] = field(default_factory=list)
+    extra_keywords: list[str] = field(default_factory=list)
     enabled: bool = True
 
     def __str__(self) -> str:
@@ -40,8 +41,19 @@ class SearchConfig:
         return [p for p in self.pages if p.enabled]
 
     def get_keywords_for_page(self, page: CareerPage) -> list[str]:
-        """Get keywords for a page (page-specific or defaults)."""
-        return page.keywords if page.keywords else self.default_keywords
+        """Get keywords for a page.
+
+        If page has custom keywords, use those.
+        Otherwise, use defaults + any extra_keywords.
+        """
+        if page.keywords:
+            return page.keywords
+        # Merge defaults with extra keywords (deduplicated, preserving order)
+        combined = list(self.default_keywords)
+        for kw in page.extra_keywords:
+            if kw not in combined:
+                combined.append(kw)
+        return combined
 
 
 def get_config_path() -> Path:
@@ -123,6 +135,7 @@ def load_config(config_path: Path | None = None) -> SearchConfig:
                 company=page_data["company"],
                 url=page_data["url"],
                 keywords=page_data.get("keywords", []),
+                extra_keywords=page_data.get("extra-keywords", []),
                 enabled=page_data.get("enabled", True),
             )
         )
