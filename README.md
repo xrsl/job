@@ -35,7 +35,7 @@ job export --format csv -o applications.csv
 Create `job-search.toml` with schema validation ([tombi VSCode Extension](https://tombi-toml.github.io/tombi/docs/editors/vscode-extension) recommended):
 
 ```toml
-#:schema https://raw.githubusercontent.com/xrsl/job/v0.3.0/schema/schema.json
+#:schema https://raw.githubusercontent.com/xrsl/job/v0.4.0/schema/schema.json
 
 [job.search]
 keywords = ["python", "backend", "senior"]
