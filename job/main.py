@@ -202,8 +202,9 @@ def add(
     model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
 ) -> None:
     """
-    Add a job ad. Fetches the job posting and stores it in the database.
+    Add or update a job ad. Fetches the job posting and stores it in the database.
 
+    If the job already exists (same URL), it will be updated with fresh data.
     By default, saves the raw fetched content to the job_ad field.
     Use --structured to extract structured fields (title, company, etc.) via AI.
     """
@@ -222,18 +223,13 @@ def add(
     final_url = validate_url(final_url)
     app_ctx.logger.debug(f"Processing URL: {final_url}")
 
-    # Check for existing entry (unless --no-cache is used)
-    existing = None
+    # Check for existing entry
     with Session(app_ctx.engine) as session:
         existing = session.exec(
             select(JobAd).where(JobAd.job_posting == final_url)
         ).first()
 
-        if existing:
-            typer.echo("Job already exists in database:")
-            typer.echo(existing.model_dump_json(indent=2))
-            return
-
+    # Fetch job content
     fetch_result = fetch_job_text(final_url, app_ctx)
     app_ctx.logger.debug("job_text_fetched", chars=len(fetch_result.content))
 
@@ -242,6 +238,10 @@ def add(
     with Session(app_ctx.engine) as session:
         if existing:
             # Update existing entry
+            existing = session.exec(
+                select(JobAd).where(JobAd.job_posting == final_url)
+            ).first()
+            assert existing is not None  # Already validated above
             for key, value in job_data.items():
                 setattr(existing, key, value)
             session.add(existing)
@@ -257,66 +257,6 @@ def add(
             session.refresh(job)
             typer.echo("Job saved:")
             typer.echo(job.model_dump_json(indent=2))
-
-
-@app.command()
-def update(
-    ctx: typer.Context,
-    url_arg: str = typer.Argument(..., help="Job posting URL to update"),
-    url: str = typer.Option(
-        None, "--url", "-u", help="Job posting URL (takes precedence)"
-    ),
-    structured: bool = typer.Option(
-        False, "--structured", "-s", help="Use AI to extract structured fields"
-    ),
-    model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
-) -> None:
-    """
-    Update an existing job ad by re-fetching.
-
-    By default, saves the raw fetched content to the job_ad field.
-    Use --structured to extract structured fields (title, company, etc.) via AI.
-    """
-    app_ctx: AppContext = ctx.obj
-    if model:
-        app_ctx = AppContext(
-            config=Config.from_env(verbose=app_ctx.config.verbose, model=model)
-        )
-
-    final_url = url or url_arg
-    if not final_url:
-        error("URL is required.")
-        raise typer.Exit(1)
-
-    final_url = validate_url(final_url)
-    app_ctx.logger.debug(f"Updating job: {final_url}")
-
-    with Session(app_ctx.engine) as session:
-        existing = session.exec(
-            select(JobAd).where(JobAd.job_posting == final_url)
-        ).first()
-
-        if not existing:
-            error(f"No job found with URL: {final_url}")
-            raise typer.Exit(1)
-
-    # Re-fetch
-    fetch_result = fetch_job_text(final_url, app_ctx)
-
-    job_data = _build_job_data(final_url, fetch_result, structured, app_ctx)
-
-    with Session(app_ctx.engine) as session:
-        existing = session.exec(
-            select(JobAd).where(JobAd.job_posting == final_url)
-        ).first()
-        assert existing is not None  # Already validated above
-        for key, value in job_data.items():
-            setattr(existing, key, value)
-        session.add(existing)
-        session.commit()
-        session.refresh(existing)
-        typer.echo("Job updated:")
-        typer.echo(existing.model_dump_json(indent=2))
 
 
 # Import commands to register them with the app
