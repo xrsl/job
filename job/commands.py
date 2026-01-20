@@ -138,7 +138,7 @@ def find(
                 | (col(JobAd.company).ilike(q))
                 | (col(JobAd.department).ilike(q))
                 | (col(JobAd.location).ilike(q))
-                | (col(JobAd.job_ad).ilike(q))
+                | (col(JobAd.full_ad).ilike(q))
             )
             .order_by(desc(JobAd.id))
         ).all()
@@ -216,7 +216,7 @@ def export(
                     | (col(JobAd.company).ilike(q))
                     | (col(JobAd.department).ilike(q))
                     | (col(JobAd.location).ilike(q))
-                    | (col(JobAd.job_ad).ilike(q))
+                    | (col(JobAd.full_ad).ilike(q))
                 )
 
             jobs = session.exec(stmt).all()

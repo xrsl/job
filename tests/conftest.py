@@ -54,5 +54,5 @@ def sample_job() -> JobAd:
         deadline="2024-12-31",
         department="Engineering",
         hiring_manager="Jane Doe",
-        job_ad="We are looking for a senior Python engineer...",
+        full_ad="We are looking for a senior Python engineer...",
     )

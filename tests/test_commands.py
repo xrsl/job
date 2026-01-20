@@ -38,7 +38,7 @@ def prepopulated_db(test_db_env):
             deadline="2025-01-01",
             department="Dep A",
             hiring_manager="Man A",
-            job_ad="Ad Content 1",
+            full_ad="Ad Content 1",
         )
         job2 = JobAd(
             job_posting_url="https://example.com/2",
@@ -48,7 +48,7 @@ def prepopulated_db(test_db_env):
             deadline="2025-02-02",
             department="Dep B",
             hiring_manager="Man B",
-            job_ad="Ad Content 2",
+            full_ad="Ad Content 2",
         )
         session.add(job1)
         session.add(job2)

@@ -10,12 +10,15 @@ from dotenv import load_dotenv
 from pydantic import ValidationError
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
+from rich.console import Console
 from sqlmodel import Session, select
 
 from job.__version__ import __version__ as job_version
 from job.core import AppContext, Config, JobAd, JobAdBase
 from job.fetchers import BrowserFetcher, StaticFetcher
 from job.fetchers.base import FetchResult
+
+console = Console()
 
 # Load environment variables from multiple locations (first found wins)
 _env_locations = [
@@ -84,24 +87,35 @@ def validate_url(url: str) -> str:
 
 
 def fetch_job_text(url: str, ctx: AppContext) -> FetchResult:
-    """Fetch job posting text, using browser if needed for JS-rendered content."""
-    static_fetcher = StaticFetcher(
-        timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
+    """Fetch job posting text, preferring browser for better content quality.
+
+    Tries browser first (which attempts to use Chrome profile for logged-in sessions),
+    then falls back to static fetch if browser fails.
+    """
+    # Try browser first - uses Chrome profile if available for logged-in sessions
+    browser_fetcher = BrowserFetcher(
+        timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS,
+        wait_time_ms=2000,
+        logger=ctx.logger,
     )
 
     try:
-        result = static_fetcher.fetch(url)
+        # console.log is used to print above the spinner without breaking it
+        console.log("[dim]Attempting to fetch with browser...[/dim]")
+        result = browser_fetcher.fetch(url)
         if len(result.content) >= ctx.config.MIN_CONTENT_LENGTH:
-            ctx.logger.debug(f"Got {len(result.content)} chars from static fetch")
+            ctx.logger.debug(f"Got {len(result.content)} chars from browser fetch")
             return result
-    except Exception:
-        pass
+    except Exception as e:
+        ctx.logger.debug(f"Browser fetch failed: {e}")
+        console.log("[dim]Browser fetch failed, falling back to static...[/dim]")
 
-    typer.echo("Page requires JavaScript, using browser...", err=True)
-    browser_fetcher = BrowserFetcher(
-        timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS, logger=ctx.logger
+    # Fall back to static fetch
+    ctx.logger.debug("Falling back to static fetch")
+    static_fetcher = StaticFetcher(
+        timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
     )
-    return browser_fetcher.fetch(url)
+    return static_fetcher.fetch(url)
 
 
 def extract_job_info(url: str, job_text: str, ctx: AppContext) -> JobAdBase:
@@ -156,7 +170,7 @@ def _build_job_data(
             "deadline": "",
             "department": "",
             "hiring_manager": "",
-            "job_ad": job_text,
+            "full_ad": job_text,
         }
     return job_data
 
@@ -207,7 +221,7 @@ def add(
 
     Fetches the job posting and stores it in the database.
     If the job already exists (same URL), it will be updated with fresh data.
-    By default, saves the raw fetched content to the job_ad field.
+    By default, saves the raw fetched content to the full_ad field.
     Use --structured to extract structured fields (title, company, etc.) via AI.
     """
     app_ctx: AppContext = ctx.obj
@@ -232,7 +246,8 @@ def add(
         ).first()
 
     # Fetch job content
-    fetch_result = fetch_job_text(final_url, app_ctx)
+    with console.status("[bold dim]Fetching job page...[/bold dim]"):
+        fetch_result = fetch_job_text(final_url, app_ctx)
     app_ctx.logger.debug("job_text_fetched", chars=len(fetch_result.content))
 
     job_data = _build_job_data(final_url, fetch_result, structured, app_ctx)

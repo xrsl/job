@@ -13,7 +13,7 @@ class JobAdBase(SQLModel):
     deadline: str
     department: str
     hiring_manager: str
-    job_ad: str
+    full_ad: str
 
 
 class JobAd(JobAdBase, table=True):

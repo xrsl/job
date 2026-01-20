@@ -60,7 +60,7 @@ def test_job_ad_unique_constraint(db_session: Session, sample_job: JobAd):
         deadline="",
         department="",
         hiring_manager="",
-        job_ad="",
+        full_ad="",
     )
 
     db_session.add(duplicate)
