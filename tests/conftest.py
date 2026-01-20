@@ -47,7 +47,7 @@ def db_session(app_context: AppContext):
 def sample_job() -> JobAd:
     """Provide a sample job for testing."""
     return JobAd(
-        job_posting="https://example.com/job/123",
+        job_posting_url="https://example.com/job/123",
         title="Senior Python Engineer",
         company="Example Corp",
         location="Copenhagen, Denmark",

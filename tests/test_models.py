@@ -10,7 +10,7 @@ def test_job_ad_creation(sample_job: JobAd):
     """Test creating a JobAd instance."""
     assert sample_job.title == "Senior Python Engineer"
     assert sample_job.company == "Example Corp"
-    assert sample_job.job_posting == "https://example.com/job/123"
+    assert sample_job.job_posting_url == "https://example.com/job/123"
 
 
 def test_job_ad_database_operations(db_session: Session, sample_job: JobAd):
@@ -24,7 +24,7 @@ def test_job_ad_database_operations(db_session: Session, sample_job: JobAd):
 
     # Read
     job = db_session.exec(
-        select(JobAd).where(JobAd.job_posting == sample_job.job_posting)
+        select(JobAd).where(JobAd.job_posting_url == sample_job.job_posting_url)
     ).first()
     assert job is not None
     assert job.title == "Senior Python Engineer"
@@ -47,13 +47,13 @@ def test_job_ad_database_operations(db_session: Session, sample_job: JobAd):
 
 
 def test_job_ad_unique_constraint(db_session: Session, sample_job: JobAd):
-    """Test that job_posting field has unique constraint."""
+    """Test that job_posting_url field has unique constraint."""
     db_session.add(sample_job)
     db_session.commit()
 
     # Try to add duplicate
     duplicate = JobAd(
-        job_posting=sample_job.job_posting,
+        job_posting_url=sample_job.job_posting_url,
         title="Different Title",
         company="Different Company",
         location="Different Location",

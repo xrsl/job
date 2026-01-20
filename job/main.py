@@ -145,11 +145,11 @@ def _build_job_data(
     if structured:
         job_info = extract_job_info(url, job_text, ctx)
         job_data = job_info.model_dump()
-        job_data["job_posting"] = url
+        job_data["job_posting_url"] = url
     else:
         title = fetch_result.title or ""
         job_data = {
-            "job_posting": url,
+            "job_posting_url": url,
             "title": title,
             "company": "",
             "location": "",
@@ -226,7 +226,7 @@ def add(
     # Check for existing entry
     with Session(app_ctx.engine) as session:
         existing = session.exec(
-            select(JobAd).where(JobAd.job_posting == final_url)
+            select(JobAd).where(JobAd.job_posting_url == final_url)
         ).first()
 
     # Fetch job content
@@ -239,7 +239,7 @@ def add(
         if existing:
             # Update existing entry
             existing = session.exec(
-                select(JobAd).where(JobAd.job_posting == final_url)
+                select(JobAd).where(JobAd.job_posting_url == final_url)
             ).first()
             assert existing is not None  # Already validated above
             for key, value in job_data.items():

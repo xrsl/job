@@ -33,8 +33,8 @@ def format_job_table(jobs: Sequence[JobAd]) -> None:
         table.add_row(
             job.title or "",
             job.company or "",
-            f"[link={job.job_posting}]{job.job_posting}[/link]"
-            if job.job_posting
+            f"[link={job.job_posting_url}]{job.job_posting_url}[/link]"
+            if job.job_posting_url
             else "",
         )
 
@@ -67,7 +67,7 @@ def show(
     url = validate_url(url)
 
     with Session(app_ctx.engine) as session:
-        job = session.exec(select(JobAd).where(JobAd.job_posting == url)).first()
+        job = session.exec(select(JobAd).where(JobAd.job_posting_url == url)).first()
 
     if not job:
         error(f"No job found with url={url}")
@@ -85,7 +85,7 @@ def rm(
     url = validate_url(url)
 
     with Session(app_ctx.engine) as session:
-        job = session.exec(select(JobAd).where(JobAd.job_posting == url)).first()
+        job = session.exec(select(JobAd).where(JobAd.job_posting_url == url)).first()
         if not job:
             error(f"No job found with url={url}")
             raise typer.Exit(1)
@@ -174,7 +174,7 @@ def export(
         buffer = StringIO()
         fieldnames = [
             "id",
-            "job_posting",
+            "job_posting_url",
             "title",
             "company",
             "location",
