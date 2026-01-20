@@ -44,7 +44,7 @@ def read_context_files(context_paths: list[str]) -> tuple[str, list[str]]:
     """Read multiple context files and combine their contents.
 
     Supports both individual files and directories (scanned recursively).
-    Directories will read common text formats: .md, .txt, .toml, .yaml, .yml, .json
+    Directories will read all files, attempting to decode as UTF-8 text.
 
     Args:
         context_paths: List of file or directory paths to read
@@ -55,9 +55,6 @@ def read_context_files(context_paths: list[str]) -> tuple[str, list[str]]:
     Raises:
         typer.Exit: If any path cannot be read
     """
-    # Common text file extensions to read from directories
-    TEXT_EXTENSIONS = {".md", ".txt", ".toml", ".yaml", ".yml", ".json"}
-
     combined_content = []
     valid_paths = []
 
@@ -74,12 +71,11 @@ def read_context_files(context_paths: list[str]) -> tuple[str, list[str]]:
         if path.is_file():
             files_to_read.append(path)
         elif path.is_dir():
-            # Recursively find all text files
-            for ext in TEXT_EXTENSIONS:
-                files_to_read.extend(path.rglob(f"*{ext}"))
+            # Recursively find all files (not directories)
+            files_to_read = [f for f in path.rglob("*") if f.is_file()]
 
             if not files_to_read:
-                error(f"No text files found in directory: {path}")
+                error(f"No files found in directory: {path}")
                 raise typer.Exit(1)
         else:
             error(f"Context path is neither a file nor directory: {path}")
@@ -96,6 +92,12 @@ def read_context_files(context_paths: list[str]) -> tuple[str, list[str]]:
                     display_name = file_path.name
                 combined_content.append(f"=== {display_name} ===\n{content}\n")
                 valid_paths.append(str(file_path.absolute()))
+            except UnicodeDecodeError:
+                # Skip binary files silently
+                console.print(
+                    f"[dim]Skipped binary file: {file_path.name}[/dim]", style="yellow"
+                )
+                continue
             except Exception as e:
                 error(f"Failed to read {file_path}: {e}")
                 raise typer.Exit(1)
@@ -245,7 +247,7 @@ def fit(
         None,
         "--context",
         "-c",
-        help="Context file or directory paths (CV, experience, etc.). Directories are scanned recursively for text files.",
+        help="Context file or directory paths (any format: .md, .pdf, .tex, .toml, etc.). Directories read all files recursively.",
     ),
     model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
 ) -> None:
@@ -256,8 +258,8 @@ def fit(
     Requires either --url or --id to specify the job, and at least one --context file or directory.
 
     Context paths can be:
-    - Individual files (any format, read as text)
-    - Directories (recursively scanned for .md, .txt, .toml, .yaml, .yml, .json files)
+    - Individual files (any format: .md, .toml, .pdf, .tex, .txt, etc.)
+    - Directories (recursively reads all files, skips binaries)
     - Mix of both
 
     Examples:
