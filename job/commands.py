@@ -1,8 +1,6 @@
 # commands.py
-import csv
 import json
 import sys
-from io import StringIO
 from typing import Sequence
 
 import typer
@@ -153,40 +151,62 @@ def find(
     format_job_table(jobs)
 
 
-@app.command()
+@app.command(name="e", hidden=True)
+@app.command(name="export")
 def export(
     ctx: typer.Context,
-    identifier: str = typer.Argument(None, help="Job ID or URL to export (optional)"),
-    format: str = typer.Option(
-        "json", "--format", "-f", help="Export format: json or csv"
-    ),
+    job_ids: list[int] = typer.Option(None, "--id", "-i", help="Job ID(s) to export"),
+    urls: list[str] = typer.Option(None, "--url", "-u", help="Job URL(s) to export"),
     output: str = typer.Option(
         None, "--output", "-o", help="Output file (default: stdout)"
     ),
     query: str = typer.Option(None, "--query", "-q", help="Filter by search query"),
 ) -> None:
-    """Export jobs to JSON or CSV format.
+    """Export jobs to JSON format.
 
-    If an identifier (ID or URL) is provided, exports only that job.
-    Otherwise, exports all jobs (optionally filtered by --query).
+    Export specific jobs by ID or URL (repeatable flags), or all jobs matching a query.
+    Examples:
+        job e --id 1 --id 2
+        job export --url https://example.com --id 5
+        job e -q "python"
     """
     app_ctx: AppContext = ctx.obj
-    format = format.lower()
-
-    if format not in ("json", "csv"):
-        error(f"Unsupported format: {format}. Use 'json' or 'csv'.")
-        raise typer.Exit(1)
 
     with Session(app_ctx.engine) as session:
-        if identifier:
-            # Export single job by ID or URL
-            job = get_job_by_id_or_url(session, identifier)
-            if not job:
-                error(f"No job found with ID or URL matching: {identifier}")
+        jobs = []
+
+        # 1. Fetch by explicit IDs/URLs if provided
+        if job_ids or urls:
+            # IDs
+            if job_ids:
+                for jid in job_ids:
+                    job = session.get(JobAd, jid)
+                    if job:
+                        jobs.append(job)
+                    else:
+                        error(f"No job found with ID: {jid}")
+
+            # URLs
+            if urls:
+                for url in urls:
+                    url_clean = validate_url(url)
+                    job = session.exec(
+                        select(JobAd).where(JobAd.job_posting_url == url_clean)
+                    ).first()
+                    if job:
+                        # Avoid duplicates if ID and URL point to same job
+                        if job not in jobs:
+                            jobs.append(job)
+                    else:
+                        error(f"No job found with URL: {url}")
+
+            if not jobs:
+                # If arguments were provided but nothing found, we should probably exit
+                # But errors are already printed.
                 raise typer.Exit(1)
-            jobs = [job]
+
+        # 2. If no explicit IDs/URLs, use query or all
         else:
-            # Export all or query
             stmt = select(JobAd).order_by(desc(JobAd.id))
 
             if query:
@@ -205,29 +225,10 @@ def export(
         typer.echo("No jobs to export.")
         return
 
-    app_ctx.logger.debug(f"Exporting {len(jobs)} jobs as {format}")
+    app_ctx.logger.debug(f"Exporting {len(jobs)} jobs as json")
 
-    if format == "json":
-        data = [job.model_dump() for job in jobs]
-        content = json.dumps(data, indent=2, ensure_ascii=False)
-    else:  # csv
-        buffer = StringIO()
-        fieldnames = [
-            "id",
-            "job_posting_url",
-            "title",
-            "company",
-            "location",
-            "deadline",
-            "department",
-            "hiring_manager",
-            "job_ad",
-        ]
-        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
-        writer.writeheader()
-        for job in jobs:
-            writer.writerow(job.model_dump())
-        content = buffer.getvalue()
+    data = [job.model_dump() for job in jobs]
+    content = json.dumps(data, indent=2, ensure_ascii=False)
 
     if output:
         try:
