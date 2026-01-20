@@ -14,7 +14,8 @@ from rich.table import Table
 
 from job.core import AppContext
 from job.fetchers import AsyncBrowserFetcher, BrowserFetcher, StaticFetcher
-from job.main import app, error
+from job.cli_app import app
+from job.utils import error
 from job.search_config import CareerPage, SearchConfig, load_config
 
 console = Console()

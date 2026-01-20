@@ -1,7 +1,7 @@
 """Tests for URL validation."""
 
 import pytest
-from job.main import validate_url
+from job.utils import validate_url
 
 
 @pytest.mark.parametrize(

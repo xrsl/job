@@ -1,22 +1,15 @@
 # main.py
-from functools import cache
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlparse
 
 import typer
 
 from dotenv import load_dotenv
-from pydantic import ValidationError
-from pydantic_ai import Agent
-from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
 from rich.console import Console
-from sqlmodel import Session, select
 
 from job.__version__ import __version__ as job_version
-from job.core import AppContext, Config, JobAd, JobAdBase
-from job.fetchers import BrowserFetcher, StaticFetcher
-from job.fetchers.base import FetchResult
+from job.core import AppContext, Config
+from job.cli_app import app
 
 console = Console()
 
@@ -34,145 +27,6 @@ for _env_path in _env_locations:
 else:
     # Fallback: try default behavior (CWD)
     load_dotenv()
-
-# -------------------------
-# CLI App
-# -------------------------
-app = typer.Typer(
-    invoke_without_command=True,
-    no_args_is_help=True,
-    context_settings={"help_option_names": ["-h", "--help"]},
-)
-
-
-def error(message: str) -> None:
-    """Print an error message to stderr."""
-    typer.echo(f"Error: {message}", err=True)
-
-
-@cache
-def create_agent(model: str, system_prompt: str) -> Agent[None, JobAdBase]:
-    """Create and cache an AI agent for the given model."""
-    return Agent(
-        model=model,
-        output_type=JobAdBase,
-        system_prompt=system_prompt,
-    )
-
-
-def validate_url(url: str) -> str:
-    """Validate and normalize a URL. Raises typer.Exit on invalid URL."""
-    url = url.strip()
-
-    # Add scheme if missing
-    if not url.startswith(("http://", "https://")):
-        url = f"https://{url}"
-
-    try:
-        parsed = urlparse(url)
-        if not parsed.netloc:
-            error(f"Invalid URL: missing domain in '{url}'")
-            raise typer.Exit(1)
-        if parsed.scheme not in ("http", "https"):
-            error(f"Invalid URL scheme: '{parsed.scheme}' (must be http or https)")
-            raise typer.Exit(1)
-        # Check for valid domain (must have a dot for TLD, unless localhost)
-        if "." not in parsed.netloc and "localhost" not in parsed.netloc.lower():
-            error(f"Invalid domain: '{parsed.netloc}' (missing TLD)")
-            raise typer.Exit(1)
-        return url
-    except ValueError as e:
-        error(f"Invalid URL format: {e}")
-        raise typer.Exit(1)
-
-
-def fetch_job_text(url: str, ctx: AppContext) -> FetchResult:
-    """Fetch job posting text, preferring browser for better content quality.
-
-    Tries browser first (which attempts to use Chrome profile for logged-in sessions),
-    then falls back to static fetch if browser fails.
-    """
-    # Try browser first - uses Chrome profile if available for logged-in sessions
-    browser_fetcher = BrowserFetcher(
-        timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS,
-        wait_time_ms=2000,
-        logger=ctx.logger,
-    )
-
-    try:
-        # console.log is used to print above the spinner without breaking it
-        console.log("[dim]Attempting to fetch with browser...[/dim]")
-        result = browser_fetcher.fetch(url)
-        if len(result.content) >= ctx.config.MIN_CONTENT_LENGTH:
-            ctx.logger.debug(f"Got {len(result.content)} chars from browser fetch")
-            return result
-    except Exception as e:
-        ctx.logger.debug(f"Browser fetch failed: {e}")
-        console.log("[dim]Browser fetch failed, falling back to static...[/dim]")
-
-    # Fall back to static fetch
-    ctx.logger.debug("Falling back to static fetch")
-    static_fetcher = StaticFetcher(
-        timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
-    )
-    return static_fetcher.fetch(url)
-
-
-def extract_job_info(url: str, job_text: str, ctx: AppContext) -> JobAdBase:
-    """Extract job information using AI agent with error handling."""
-    agent = create_agent(ctx.config.model, ctx.config.SYSTEM_PROMPT)
-
-    try:
-        result = agent.run_sync(
-            f"Extract job info from this posting.\nURL: {url}\n\nJob text:\n{job_text}"
-        )
-        return result.output
-    except ValidationError as e:
-        error(f"AI returned invalid data: {e}")
-        raise typer.Exit(1)
-    except UnexpectedModelBehavior as e:
-        error(f"AI model behaved unexpectedly: {e}")
-        raise typer.Exit(1)
-    except ModelRetry as e:
-        error(f"AI model failed after retries: {e}")
-        raise typer.Exit(1)
-    except Exception as e:
-        error(f"Failed to extract job info: {e}")
-        raise typer.Exit(1)
-
-
-def _build_job_data(
-    url: str, fetch_result: FetchResult, structured: bool, ctx: AppContext
-) -> dict:
-    """Build job data dict, optionally using AI extraction.
-
-    Args:
-        url: The job posting URL
-        fetch_result: The fetched job result including text and title
-        structured: If True, use AI to extract structured fields
-        ctx: Application context
-
-    Returns:
-        Dict with job data ready for database insertion
-    """
-    job_text = fetch_result.content
-    if structured:
-        job_info = extract_job_info(url, job_text, ctx)
-        job_data = job_info.model_dump()
-        job_data["job_posting_url"] = url
-    else:
-        title = fetch_result.title or ""
-        job_data = {
-            "job_posting_url": url,
-            "title": title,
-            "company": "",
-            "location": "",
-            "deadline": "",
-            "department": "",
-            "hiring_manager": "",
-            "full_ad": job_text,
-        }
-    return job_data
 
 
 def version_option_callback(value: bool):
@@ -203,80 +57,8 @@ def main(
     ctx.obj = AppContext(config=config)
 
 
-@app.command(name="a", hidden=True)
-@app.command()
-def add(
-    ctx: typer.Context,
-    url_arg: str = typer.Argument(None, help="Job posting URL"),
-    url: str = typer.Option(
-        None, "--url", "-u", help="Job posting URL (takes precedence)"
-    ),
-    structured: bool = typer.Option(
-        False, "--structured", "-s", help="Use AI to extract structured fields"
-    ),
-    model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
-) -> None:
-    """
-    Add or update a job ad. (Alias: a)
-
-    Fetches the job posting and stores it in the database.
-    If the job already exists (same URL), it will be updated with fresh data.
-    By default, saves the raw fetched content to the full_ad field.
-    Use --structured to extract structured fields (title, company, etc.) via AI.
-    """
-    app_ctx: AppContext = ctx.obj
-    if model:
-        # Override model if specified
-        app_ctx = AppContext(
-            config=Config.from_env(verbose=app_ctx.config.verbose, model=model)
-        )
-
-    final_url = url or url_arg
-    if not final_url:
-        error("URL is required.")
-        raise typer.Exit(1)
-
-    final_url = validate_url(final_url)
-    app_ctx.logger.debug(f"Processing URL: {final_url}")
-
-    # Check for existing entry
-    with Session(app_ctx.engine) as session:
-        existing = session.exec(
-            select(JobAd).where(JobAd.job_posting_url == final_url)
-        ).first()
-
-    # Fetch job content
-    with console.status("[bold dim]Fetching job page...[/bold dim]"):
-        fetch_result = fetch_job_text(final_url, app_ctx)
-    app_ctx.logger.debug("job_text_fetched", chars=len(fetch_result.content))
-
-    job_data = _build_job_data(final_url, fetch_result, structured, app_ctx)
-
-    with Session(app_ctx.engine) as session:
-        if existing:
-            # Update existing entry
-            existing = session.exec(
-                select(JobAd).where(JobAd.job_posting_url == final_url)
-            ).first()
-            assert existing is not None  # Already validated above
-            for key, value in job_data.items():
-                setattr(existing, key, value)
-            session.add(existing)
-            session.commit()
-            session.refresh(existing)
-            typer.echo("Job updated:")
-            typer.echo(existing.model_dump_json(indent=2))
-        else:
-            # Create new entry
-            job = JobAd.model_validate(job_data)
-            session.add(job)
-            session.commit()
-            session.refresh(job)
-            typer.echo("Job saved:")
-            typer.echo(job.model_dump_json(indent=2))
-
-
 # Import commands to register them with the app
+from job import add  # noqa: E402, F401
 from job import commands  # noqa: E402, F401
 from job import search  # noqa: E402, F401
 
