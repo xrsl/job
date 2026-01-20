@@ -9,7 +9,6 @@ from rich.console import Console
 
 from job.__version__ import __version__ as job_version
 from job.core import AppContext, Config
-from job.cli_app import app
 
 console = Console()
 
@@ -27,6 +26,14 @@ for _env_path in _env_locations:
 else:
     # Fallback: try default behavior (CWD)
     load_dotenv()
+
+
+# Main CLI application instance
+app = typer.Typer(
+    invoke_without_command=True,
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 
 
 def version_option_callback(value: bool):
@@ -57,10 +64,12 @@ def main(
     ctx.obj = AppContext(config=config)
 
 
-# Import commands to register them with the app
-from job import add  # noqa: E402, F401
-from job import commands  # noqa: E402, F401
-from job import search  # noqa: E402, F401
+# Import and register sub-apps
+from job.search import app as search_app  # noqa: E402
+from job.add import app as add_app  # noqa: E402
+from job.commands import app as commands_app  # noqa: E402
 
-if __name__ == "__main__":
-    app()
+# Merge all sub-apps at root level for flat command structure
+app.add_typer(search_app)
+app.add_typer(add_app)
+app.add_typer(commands_app)

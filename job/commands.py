@@ -9,10 +9,12 @@ from rich.table import Table
 from sqlmodel import Session, col, desc, select
 
 from job.core import AppContext, JobAd
-from job.cli_app import app
 from job.utils import error, validate_url
 
 console = Console()
+
+# Create sub-app for job management commands
+app = typer.Typer()
 
 
 # -------------------------

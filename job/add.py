@@ -7,12 +7,14 @@ from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
 from pydantic import ValidationError
 
 from job.core import AppContext, Config, JobAd, JobAdBase
-from job.cli_app import app
 from job.utils import error, validate_url
 from job.fetchers import BrowserFetcher, StaticFetcher
 from job.fetchers.base import FetchResult
 
 console = Console()
+
+# Create sub-app for add commands
+app = typer.Typer()
 
 
 @cache
