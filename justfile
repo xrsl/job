@@ -124,6 +124,14 @@ alias r := release
 release type:
     bump-my-version bump {{type}}
 
+alias rp := release-push
+# Release new version: just release [major|minor|patch] and push
+release-push type:
+    bump-my-version bump {{type}}
+    git push
+    git push --tags
+    @echo "✅ released and pushed {{type}} version"
+
 alias t := test
 # Run tests with pytest
 test:

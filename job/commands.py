@@ -25,12 +25,14 @@ def format_job_table(jobs: Sequence[JobAd]) -> None:
         return
 
     table = Table(show_header=True, header_style="bold cyan", border_style="dim")
+    table.add_column("ID", style="dim", justify="right", no_wrap=True)
     table.add_column("Title", style="magenta", no_wrap=False)
     table.add_column("Company", style="green")
     table.add_column("URL", style="blue", no_wrap=False)
 
     for job in jobs:
         table.add_row(
+            str(job.id),
             job.title or "",
             job.company or "",
             f"[link={job.job_posting_url}]{job.job_posting_url}[/link]"
@@ -39,6 +41,26 @@ def format_job_table(jobs: Sequence[JobAd]) -> None:
         )
 
     console.print(table)
+
+
+def get_job_by_id_or_url(session: Session, identifier: str) -> JobAd | None:
+    """Find a job by ID (if integer) or URL."""
+    if identifier.isdigit():
+        job = session.get(JobAd, int(identifier))
+        if job:
+            return job
+
+    # Fallback to URL lookup
+    try:
+        url = validate_url(identifier)
+        return session.exec(select(JobAd).where(JobAd.job_posting_url == url)).first()
+    except typer.Exit:
+        # validate_url raises Exit on failure, but here we might just want to return None
+        # if the identifier isn't a valid URL either.
+        # However, validate_url prints an error before exiting.
+        # To be safe, we can just let it raise if it looks like a URL but fails,
+        # or we could catch it. Use simple string check first?
+        return None
 
 
 # -------------------------
@@ -61,40 +83,43 @@ def list_jobs(ctx: typer.Context) -> None:
 
 @app.command()
 def show(
-    ctx: typer.Context, url: str = typer.Argument(..., help="Job posting URL")
+    ctx: typer.Context,
+    identifier: str = typer.Argument(..., help="Job ID or URL"),
 ) -> None:
-    """Show a single job ad by URL."""
+    """Show a single job ad by ID or URL."""
     app_ctx: AppContext = ctx.obj
-    url = validate_url(url)
 
     with Session(app_ctx.engine) as session:
-        job = session.exec(select(JobAd).where(JobAd.job_posting_url == url)).first()
+        job = get_job_by_id_or_url(session, identifier)
 
-    if not job:
-        error(f"No job found with url={url}")
-        raise typer.Exit(1)
+        if not job:
+            # If get_job_by_id_or_url returned None (and didn't exit), it means not found
+            error(f"No job found with ID or URL matching: {identifier}")
+            raise typer.Exit(1)
 
-    typer.echo(job.model_dump_json(indent=2))
+        typer.echo(job.model_dump_json(indent=2))
 
 
 @app.command()
 def rm(
-    ctx: typer.Context, url: str = typer.Argument(..., help="Job posting URL")
+    ctx: typer.Context,
+    identifier: str = typer.Argument(..., help="Job ID or URL"),
 ) -> None:
-    """Delete a job ad by URL."""
+    """Delete a job ad by ID or URL."""
     app_ctx: AppContext = ctx.obj
-    url = validate_url(url)
 
     with Session(app_ctx.engine) as session:
-        job = session.exec(select(JobAd).where(JobAd.job_posting_url == url)).first()
+        job = get_job_by_id_or_url(session, identifier)
+
         if not job:
-            error(f"No job found with url={url}")
+            error(f"No job found with ID or URL matching: {identifier}")
             raise typer.Exit(1)
 
+        url = job.job_posting_url
         session.delete(job)
         session.commit()
 
-    typer.echo(f"Deleted job: {url}")
+    typer.echo(f"Deleted job {job.id}: {url}")
 
 
 @app.command()
@@ -131,6 +156,7 @@ def find(
 @app.command()
 def export(
     ctx: typer.Context,
+    identifier: str = typer.Argument(None, help="Job ID or URL to export (optional)"),
     format: str = typer.Option(
         "json", "--format", "-f", help="Export format: json or csv"
     ),
@@ -139,7 +165,11 @@ def export(
     ),
     query: str = typer.Option(None, "--query", "-q", help="Filter by search query"),
 ) -> None:
-    """Export jobs to JSON or CSV format."""
+    """Export jobs to JSON or CSV format.
+
+    If an identifier (ID or URL) is provided, exports only that job.
+    Otherwise, exports all jobs (optionally filtered by --query).
+    """
     app_ctx: AppContext = ctx.obj
     format = format.lower()
 
@@ -148,19 +178,28 @@ def export(
         raise typer.Exit(1)
 
     with Session(app_ctx.engine) as session:
-        stmt = select(JobAd).order_by(desc(JobAd.id))
+        if identifier:
+            # Export single job by ID or URL
+            job = get_job_by_id_or_url(session, identifier)
+            if not job:
+                error(f"No job found with ID or URL matching: {identifier}")
+                raise typer.Exit(1)
+            jobs = [job]
+        else:
+            # Export all or query
+            stmt = select(JobAd).order_by(desc(JobAd.id))
 
-        if query:
-            q = f"%{query.lower()}%"
-            stmt = stmt.where(
-                (col(JobAd.title).ilike(q))
-                | (col(JobAd.company).ilike(q))
-                | (col(JobAd.department).ilike(q))
-                | (col(JobAd.location).ilike(q))
-                | (col(JobAd.job_ad).ilike(q))
-            )
+            if query:
+                q = f"%{query.lower()}%"
+                stmt = stmt.where(
+                    (col(JobAd.title).ilike(q))
+                    | (col(JobAd.company).ilike(q))
+                    | (col(JobAd.department).ilike(q))
+                    | (col(JobAd.location).ilike(q))
+                    | (col(JobAd.job_ad).ilike(q))
+                )
 
-        jobs = session.exec(stmt).all()
+            jobs = session.exec(stmt).all()
 
     if not jobs:
         typer.echo("No jobs to export.")
