@@ -189,6 +189,7 @@ def main(
     ctx.obj = AppContext(config=config)
 
 
+@app.command(name="a", hidden=True)
 @app.command()
 def add(
     ctx: typer.Context,
@@ -202,8 +203,9 @@ def add(
     model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
 ) -> None:
     """
-    Add or update a job ad. Fetches the job posting and stores it in the database.
+    Add or update a job ad. (Alias: a)
 
+    Fetches the job posting and stores it in the database.
     If the job already exists (same URL), it will be updated with fresh data.
     By default, saves the raw fetched content to the job_ad field.
     Use --structured to extract structured fields (title, company, etc.) via AI.
