@@ -12,20 +12,25 @@ from job.core import AppContext, Config
 
 console = Console()
 
-# Load environment variables from multiple locations (first found wins)
-_env_locations = [
-    Path.home() / ".config" / "job" / ".env",  # XDG-style config
-    Path.home() / ".job.env",  # Home directory dotfile
-    Path.cwd() / ".env",  # Current directory (for development)
+# Load environment variables
+# 1. Load system/global config first
+global_env_locations = [
+    Path.home() / ".config" / "job" / ".env",
+    Path.home() / ".job.env",
 ]
-
-for _env_path in _env_locations:
+for _env_path in global_env_locations:
     if _env_path.exists():
         load_dotenv(_env_path)
         break
+
+# 2. Load local config (overrides global)
+local_env = Path.cwd() / ".env"
+if local_env.exists():
+    load_dotenv(local_env, override=True)
 else:
-    # Fallback: try default behavior (CWD)
-    load_dotenv()
+    # Fallback if no specific files found above, try default behavior
+    if not any(p.exists() for p in global_env_locations):
+        load_dotenv()
 
 
 # Main CLI application instance

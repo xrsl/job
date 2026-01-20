@@ -110,7 +110,11 @@ def _build_job_data(
     """
     job_text = fetch_result.content
     if structured:
-        job_info = extract_job_info(url, job_text, ctx)
+        model_name = ctx.config.model
+        with console.status(
+            f"[bold dim]Extracting fields using {model_name}...[/bold dim]"
+        ):
+            job_info = extract_job_info(url, job_text, ctx)
         job_data = job_info.model_dump()
         job_data["job_posting_url"] = url
     else:

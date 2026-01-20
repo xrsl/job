@@ -22,6 +22,14 @@ search company="" keyword="":
         uv run job search --company "{{company}}" --keyword "{{keyword}}"; \
     fi
 
+
+alias ls-m := ls-models
+# List available models (optional filter: just ls-m openai)
+ls-models filter="":
+    uv run python scripts/list_models.py "{{filter}}"
+
+
+
 alias p := prek
 # Run pre-commit checks (includes ruff, ty)
 prek:
