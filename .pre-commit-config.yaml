@@ -9,6 +9,7 @@ repos:
     rev: v0.14.11
     hooks:
       - id: ruff-check
+        args: ["--fix"]
       - id: ruff-format
 
   # - repo: local

@@ -6,7 +6,7 @@ from pydantic_ai import Agent
 from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
 from pydantic import ValidationError
 
-from job.core import AppContext, Config, JobAd, JobAdBase
+from job.core import AppContext, JobAd, JobAdBase
 from job.utils import error, validate_url
 from job.fetchers import BrowserFetcher, StaticFetcher
 from job.fetchers.base import FetchResult
@@ -28,33 +28,47 @@ def create_agent(model: str, system_prompt: str) -> Agent[None, JobAdBase]:
 
 
 def fetch_job_text(url: str, ctx: AppContext, use_browser: bool = False) -> FetchResult:
-    """Fetch job posting text.
+    """Fetch job posting text with automatic fallback.
 
     Args:
         url: The URL to fetch
         ctx: Application context
-        use_browser: If True, use BrowserFetcher (slower, handles JS).
-                     If False, use StaticFetcher (fast, no JS).
+        use_browser: If True, skip static fetch and use browser directly.
+                     If False, try static first, fall back to browser on failure.
 
     Returns:
         FetchResult containing text and title
     """
     if use_browser:
-        # Use browser fetcher (Profile -> Fresh)
+        # Force browser fetch
         browser_fetcher = BrowserFetcher(
             timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS,
             wait_time_ms=2000,
             logger=ctx.logger,
         )
-        console.log("[dim]Fetching with browser...[/dim]")
+        if ctx.config.verbose:
+            console.log("[dim]Fetching with browser...[/dim]")
         return browser_fetcher.fetch(url)
 
-    # Use static fetcher (default)
+    # Try static fetch first (fast)
     static_fetcher = StaticFetcher(
         timeout=ctx.config.REQUEST_TIMEOUT, logger=ctx.logger
     )
-    console.log("[dim]Fetching with requests...[/dim]")
-    return static_fetcher.fetch(url)
+    if ctx.config.verbose:
+        console.log("[dim]Fetching with requests...[/dim]")
+    try:
+        return static_fetcher.fetch(url)
+    except Exception as e:
+        # Static fetch failed, retry with browser
+        ctx.logger.debug("static_fetch_failed", error=str(e))
+        if ctx.config.verbose:
+            console.log("[dim]Static fetch failed, retrying with browser...[/dim]")
+        browser_fetcher = BrowserFetcher(
+            timeout_ms=ctx.config.PLAYWRIGHT_TIMEOUT_MS,
+            wait_time_ms=2000,
+            logger=ctx.logger,
+        )
+        return browser_fetcher.fetch(url)
 
 
 def extract_job_info(url: str, job_text: str, ctx: AppContext) -> JobAdBase:
@@ -138,19 +152,13 @@ def add(
     """
     app_ctx: AppContext = ctx.obj
     if model:
-        # Override model if specified
-        app_ctx = AppContext(
-            config=Config.from_env(verbose=app_ctx.config.verbose, model=model)
-        )
+        # Override model if specified (Config is frozen, so create new instance)
+        from dataclasses import replace
+
+        app_ctx.config = replace(app_ctx.config, model=model)
 
     final_url = validate_url(url)
     app_ctx.logger.debug(f"Processing URL: {final_url}")
-
-    # Check for existing entry
-    with Session(app_ctx.engine) as session:
-        existing = session.exec(
-            select(JobAd).where(JobAd.job_posting_url == final_url)
-        ).first()
 
     # Fetch job content
     with console.status("[bold dim]Fetching job page...[/bold dim]"):
@@ -160,12 +168,13 @@ def add(
     job_data = _build_job_data(final_url, fetch_result, structured, app_ctx)
 
     with Session(app_ctx.engine) as session:
+        # Check for existing entry
+        existing = session.exec(
+            select(JobAd).where(JobAd.job_posting_url == final_url)
+        ).first()
+
         if existing:
             # Update existing entry
-            existing = session.exec(
-                select(JobAd).where(JobAd.job_posting_url == final_url)
-            ).first()
-            assert existing is not None  # Already validated above
             for key, value in job_data.items():
                 setattr(existing, key, value)
             session.add(existing)
