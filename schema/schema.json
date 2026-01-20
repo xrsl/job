@@ -21,7 +21,10 @@
           "type": "boolean"
         }
       },
-      "required": ["company", "url"],
+      "required": [
+        "company",
+        "url"
+      ],
       "x-tombi-table-keys-order": "schema"
     },
     "#JobSearch": {
