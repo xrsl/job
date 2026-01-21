@@ -1,46 +1,41 @@
 # application cmd (alias app)
 
+implement sub app named app_app in job/app.py and add it into main similar to fit_app.
+it will write docs with ai similar to cvx build (see ../cvx/)
+
 Keep the <id> positional everywhere to be consistent.
 
 job app ls # list all applications in db
-job app write 42 # might also be just callback, so job app 42, similar to job fit 42, createsDraftResult
-job app tag 42 # Tag application as final, might also named submit
-job app view 42
-job app rm 42 # Remove application
-
+job app write 42 # might also be just callback, so job app 42, similar to job fit run 42, creates DraftResult
 --cv/--no-cv
 --letter/--no-letter
---render -r/--no-render # default false, calls typst
+job app view 42 -i 1 # view application made for job
+job app rm 42 # Remove all DraftResult for 42 application
+
+DraftResult has id, job_id, all the ai written src files content? and other metadata similar to AssessmentResult
+1 job can have multiple DraftResults from different models and different sources, can also be diffs.
 
 job app w <id> -m <model> --source src/cv.toml --source src/letter.toml --template src/template.toml
 job app w <id> --no-letter # validates and formats using cue? or just rely on pydantic-ai
-job app r <id> # render the application for job 42, uses renderer, template, and output flags
-job app t <id> # tag the current state of the application for job <id>, makes it final
-job app v <id> # view application made (tagged) for job
+job app v <id> -i 1 # view application made for job
 
 [job.app]
 model = "gpt-4o"
 schema = "schema/schema.json"
-renderer = "typst"
 
-[job.app.documents.cv]
+[job.app.write.cv]
 source = "src/cv.toml"
-template = "template/cv.typ"
-output = "out/cv.pdf"
 
-[job.app.documents.letter]
+[job.app.write.letter]
 source = "src/letter.toml"
 schema = "schema/letter.json"
-template = "template/letter.typ"
+
 output = "out/letter.pdf"
-
-# fit
-
-Keep the <id> positional everywhere to be consistent.
-rename context to extra
-[job.fit]
-cv = "src/cv.toml"
-extra = ["persona.md", "experience.md"]
-j
-
-job fit --cv cv.pdf --extra persona.md --extra experience.md
+output = "out/cv.pdf"
+job app tag 42 # Tag application as final, might also named submit
+job app t <id> # tag the current state of the application for job <id>, makes it final
+--render -r/--no-render # default false, calls typst
+template = "template/cv.typ"
+template = "template/letter.typ"
+renderer = "typst"
+job app r <id> # render the application for job 42, uses renderer, template, and output flags

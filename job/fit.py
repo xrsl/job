@@ -15,10 +15,7 @@ from job.utils import error
 console = Console()
 
 # Create sub-app for fit commands
-# Set invoke_without_command=True to allow both direct invocation and subcommands
-app = typer.Typer(
-    invoke_without_command=True, help="Job fit assessment commands (Alias: f)"
-)
+app = typer.Typer(help="Job fit assessment commands (Alias: f)")
 
 
 @cache
@@ -220,10 +217,11 @@ def display_fit_assessment(
     console.print(f"[dim]Assessment ID: {assessment_id}[/dim]")
 
 
-@app.callback(invoke_without_command=True)
-def fit(
+@app.command(name="r", hidden=True)
+@app.command()
+def run(
     ctx: typer.Context,
-    job_id: int = typer.Argument(None, help="Job ID from database"),
+    job_id: int = typer.Argument(..., help="Job ID from database"),
     cv: str = typer.Option(
         None,
         "--cv",
@@ -240,28 +238,18 @@ def fit(
     ),
 ) -> None:
     """
-    Assess job fit against candidate context.
+    Assess job fit against candidate context. (Alias: r)
 
     Analyzes how well a job matches your background based on CV and other context files.
     Requires job_id as positional argument. CV and extra files can be provided via flags
     or from config (job.toml).
 
     Examples:
-        job fit 42 --cv cv.pdf --extra persona.md --extra experience.md
-        job fit 42 -e reference.md -m claude-sonnet-4.5
-        job fit 42  # uses cv and extra from job.toml
-        job fit view --id 2  (view saved assessments)
+        job fit run 42 --cv cv.pdf --extra persona.md --extra experience.md
+        job fit r 42 -e reference.md -m claude-sonnet-4.5
+        job fit run 42  # uses cv and extra from job.toml
     """
-    # If a subcommand was invoked, don't run the assessment logic
-    if ctx.invoked_subcommand is not None:
-        return
-
     app_ctx: AppContext = ctx.obj
-
-    # Validate job specification
-    if job_id is None:
-        error("Must provide job_id as positional argument")
-        raise typer.Exit(1)
 
     # Build final context list: CV + extra files
     final_context = []
@@ -361,43 +349,41 @@ Provide a comprehensive fit assessment."""
 @app.command()
 def view(
     ctx: typer.Context,
-    job_id: int = typer.Option(
-        None, "--id", "-i", help="Job ID to view assessments for"
-    ),
+    job_id: int = typer.Argument(..., help="Job ID to view assessments for"),
     assessment_id: int = typer.Option(
-        None, "--assessment-id", "-a", help="Specific assessment ID to view directly"
+        None, "-i", help="Specific assessment ID to view directly"
     ),
 ) -> None:
     """
     View stored fit assessments. (Alias: v)
 
-    View either a specific assessment by ID, or all assessments for a job.
-    Requires either --id or --assessment-id.
+    View either all assessments for a job, or a specific assessment with -i flag.
+    Requires job_id as positional argument.
 
     Examples:
-        job fit view -a 5        (view assessment 5)
-        job fit view -i 1        (list all assessments for job 1)
-        job fit v -a 3           (using alias)
+        job fit view 1           (list all assessments for job 1)
+        job fit view 1 -i 5      (view assessment 5 for job 1)
+        job fit v 1              (using alias)
     """
     app_ctx: AppContext = ctx.obj
 
-    # Validate arguments
-    if job_id is None and assessment_id is None:
-        error("Must provide either --id (job ID) or --assessment-id")
-        raise typer.Exit(1)
-
     with Session(app_ctx.engine) as session:
-        # If assessment_id is provided, view that specific one
+        # Get the job first
+        job = session.get(JobAd, job_id)
+        if not job:
+            error(f"No job found with ID: {job_id}")
+            raise typer.Exit(1)
+
+        # If assessment_id is provided, view that specific one for this job
         if assessment_id is not None:
             assessment = session.get(JobFitAssessment, assessment_id)
             if not assessment:
                 error(f"No assessment found with ID: {assessment_id}")
                 raise typer.Exit(1)
 
-            # Get the job
-            job = session.get(JobAd, assessment.job_id)
-            if not job:
-                error(f"Job not found for assessment {assessment_id}")
+            # Verify the assessment belongs to this job
+            if assessment.job_id != job_id:
+                error(f"Assessment {assessment_id} does not belong to job {job_id}")
                 raise typer.Exit(1)
 
             assert assessment.id is not None  # ID exists for loaded record
@@ -405,11 +391,6 @@ def view(
             return
 
         # Otherwise, list assessments for the job
-        # Get the job
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
 
         # Get all assessments for this job
         assessments = session.exec(
@@ -504,55 +485,52 @@ def view(
 @app.command()
 def rm(
     ctx: typer.Context,
+    job_id: int = typer.Argument(..., help="Job ID to delete assessments for"),
     assessment_id: int = typer.Option(
-        None, "--assessment-id", "-a", help="Delete specific assessment by ID"
-    ),
-    job_id: int = typer.Option(
-        None, "--job-id", "-i", help="Delete all assessments for a job"
+        None,
+        "-i",
+        help="Specific assessment ID to delete (deletes all if not provided)",
     ),
 ) -> None:
     """
     Delete fit assessments from database.
 
-    Delete either a specific assessment by ID, or all assessments for a job.
-    Requires either --assessment-id or --job-id.
+    Delete either all assessments for a job, or a specific assessment with -i flag.
+    Requires job_id as positional argument.
 
     Examples:
-        job fit rm -a 5           (delete assessment 5)
-        job fit rm -i 1           (delete all assessments for job 1)
+        job fit rm 1              (delete all assessments for job 1)
+        job fit rm 1 -i 2         (delete only assessment 2 for job 1)
     """
     app_ctx: AppContext = ctx.obj
 
-    # Validate arguments
-    if assessment_id is None and job_id is None:
-        error("Must provide either --assessment-id or --job-id")
-        raise typer.Exit(1)
-
-    if assessment_id is not None and job_id is not None:
-        error("Cannot provide both --assessment-id and --job-id")
-        raise typer.Exit(1)
-
     with Session(app_ctx.engine) as session:
+        # First verify job exists
+        job = session.get(JobAd, job_id)
+        if not job:
+            error(f"No job found with ID: {job_id}")
+            raise typer.Exit(1)
+
         if assessment_id is not None:
-            # Delete specific assessment
+            # Delete specific assessment for this job
             assessment = session.get(JobFitAssessment, assessment_id)
             if not assessment:
                 error(f"No assessment found with ID: {assessment_id}")
                 raise typer.Exit(1)
 
-            session.delete(assessment)
-            session.commit()
-            console.print(f"[green]✓[/green] Deleted assessment {assessment_id}")
-
-        else:
-            # Delete all assessments for a job
-            # First verify job exists
-            job = session.get(JobAd, job_id)
-            if not job:
-                error(f"No job found with ID: {job_id}")
+            # Verify the assessment belongs to this job
+            if assessment.job_id != job_id:
+                error(f"Assessment {assessment_id} does not belong to job {job_id}")
                 raise typer.Exit(1)
 
-            # Get all assessments
+            session.delete(assessment)
+            session.commit()
+            console.print(
+                f"[green]✓[/green] Deleted assessment {assessment_id} for job {job_id}"
+            )
+
+        else:
+            # Delete all assessments for the job
             assessments = session.exec(
                 select(JobFitAssessment).where(JobFitAssessment.job_id == job_id)
             ).all()
