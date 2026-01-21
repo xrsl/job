@@ -47,6 +47,54 @@
         }
       }
     },
+    "JobApp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "write": {
+          "$ref": "#/$defs/JobAppWrite"
+        }
+      }
+    },
+    "JobAppWrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cv": {
+          "$ref": "#/$defs/JobAppWriteCv"
+        },
+        "letter": {
+          "$ref": "#/$defs/JobAppWriteLetter"
+        }
+      }
+    },
+    "JobAppWriteCv": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "JobAppWriteLetter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
     "JobExport": {
       "type": "object",
       "additionalProperties": false,
@@ -126,6 +174,9 @@
         "add": {
           "$ref": "#/$defs/JobAdd"
         },
+        "app": {
+          "$ref": "#/$defs/JobApp"
+        },
         "db-path": {
           "type": "string"
         },
@@ -170,6 +221,22 @@
       "x-tombi-table-keys-order": "schema"
     },
     "#JobExport": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobAppWriteCv": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobAppWriteLetter": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobAppWrite": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobApp": {
       "properties": {},
       "x-tombi-table-keys-order": "schema"
     },

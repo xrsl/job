@@ -35,6 +35,7 @@ class JobAd(JobAdBase, table=True):
     posted_at: datetime | None = Field(default=None)
 
     fit_assessments: list["JobFitAssessment"] = Relationship(back_populates="job")
+    app_drafts: list["JobAppDraft"] = Relationship(back_populates="job")
 
 
 class JobFitAssessmentBase(SQLModel):
@@ -78,3 +79,34 @@ class JobFitAssessment(JobFitAssessmentBase, table=True):
     gaps: str  # JSON array of gap statements
 
     job: Optional["JobAd"] = Relationship(back_populates="fit_assessments")
+
+
+class JobAppDraftBase(SQLModel):
+    """Base schema for AI-generated application documents (no DB metadata)."""
+
+    cv_content: str | None = Field(
+        default=None,
+        description="Generated CV content in the source format (TOML/YAML/etc)",
+    )
+    letter_content: str | None = Field(
+        default=None,
+        description="Generated cover letter content in the source format (TOML/YAML/etc)",
+    )
+    notes: str | None = Field(
+        default=None, description="Optional notes or metadata about this draft"
+    )
+
+
+class JobAppDraft(JobAppDraftBase, table=True):
+    """Database table for AI-generated application documents."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="jobad.id", index=True)
+    model_name: str = Field(index=True)
+    source_cv_path: str | None = Field(default=None)  # Path to source CV file
+    source_letter_path: str | None = Field(default=None)  # Path to source letter file
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc), index=True
+    )
+
+    job: Optional["JobAd"] = Relationship(back_populates="app_drafts")

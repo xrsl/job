@@ -44,6 +44,30 @@ package job
 	output?:          string
 }
 
+// App write CV settings
+#JobAppWriteCv: {
+	source?: string
+}
+
+// App write letter settings
+#JobAppWriteLetter: {
+	source?: string
+	schema?: string
+}
+
+// App write settings
+#JobAppWrite: {
+	cv?:     #JobAppWriteCv
+	letter?: #JobAppWriteLetter
+}
+
+// App command settings
+#JobApp: {
+	model?:  string
+	schema?: string
+	write?:  #JobAppWrite
+}
+
 // Top-level job settings
 #JobSettings: {
 	model?:     string
@@ -53,6 +77,7 @@ package job
 	gh?:     #JobGH
 	fit?:    #JobFit
 	add?:    #JobAdd
+	app?:    #JobApp
 	export?: #JobExport
 	search?: #JobSearch
 }

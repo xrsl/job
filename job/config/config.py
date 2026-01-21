@@ -7,7 +7,7 @@ from typing import ClassVar
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .extensions import JobAdd, JobExport, JobFit, JobGH, JobSearch
+from .extensions import JobAdd, JobApp, JobExport, JobFit, JobGH, JobSearch
 
 
 class Settings(BaseSettings):
@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     gh: JobGH = Field(default_factory=JobGH)
     fit: JobFit = Field(default_factory=JobFit)
     add: JobAdd = Field(default_factory=JobAdd)
+    app: JobApp = Field(default_factory=JobApp)
     export: JobExport = Field(default_factory=JobExport)
     search: JobSearch = Field(default_factory=JobSearch)
 

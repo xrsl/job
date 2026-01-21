@@ -13,6 +13,7 @@ from .config import Settings, settings
 from .extensions import (
     CareerPage,
     JobAdd,
+    JobApp,
     JobExport,
     JobFit,
     JobGH,
@@ -32,6 +33,7 @@ __all__ = [
     "Settings",
     "CareerPage",
     "JobAdd",
+    "JobApp",
     "JobExport",
     "JobFit",
     "JobGH",
