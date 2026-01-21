@@ -54,7 +54,7 @@ search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "job-search.toml"
+filename = "job.toml"
 search = "https://raw.githubusercontent.com/xrsl/job/v{current_version}/schema/schema.json"
 replace = "https://raw.githubusercontent.com/xrsl/job/v{new_version}/schema/schema.json"
 

@@ -1,10 +1,10 @@
 # Schema Configuration
 
-This directory contains the JSON Schema for `job-search.toml`.
+This directory contains the JSON Schema for `job.toml`.
 
 ## Schema Usage
 
-Add this to the top of your `job-search.toml`:
+Add this to the top of your `job.toml`:
 
 ```toml
 #:schema https://raw.githubusercontent.com/xrsl/job/v0.5.0/schema/schema.json
@@ -15,8 +15,8 @@ Add this to the top of your `job-search.toml`:
 Validate your config with [tombi](https://github.com/tombi-toml/tombi) cli:
 
 ```bash
-tombi lint job-search.toml
-tombi format job-search.toml
+tombi lint job.toml
+tombi format job.toml
 ```
 
 ## Schema Development
