@@ -102,11 +102,17 @@ build:
     uv build --sdist --wheel --out-dir dist
     @echo "✅ built wheel and source distribution"
 
-alias i := install
+alias bi := build-install
 # Install job CLI tool from dist/*.whl
-install: build
+build-install: build
     uv tool install dist/*.whl --force
     @echo "✅ installed job CLI tool"
+
+alias i := editable-install
+# Install job CLI tool in editable mode (for development)
+editable-install: uninstall
+    uv tool install --editable . --python 3.12 # --force
+    @echo "✅ installed job CLI tool in editable mode"
 
 alias gi := git-install
 # Install job CLI tool from git

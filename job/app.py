@@ -1,10 +1,15 @@
 import typer
+from functools import cache
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from sqlmodel import Session, desc, select
+from pydantic_ai import Agent
+from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
+from pydantic import ValidationError
 
-from job.core import AppContext, JobAd, JobAppDraft
+from job.core import AppContext, JobAd, JobAppDraft, JobAppDraftBase
 from job.utils import error
 
 console = Console()
@@ -13,8 +18,80 @@ console = Console()
 app = typer.Typer(help="Job application document generation commands")
 
 
-# TODO: Implement read_source_file and write_source_file functions
-# when AI agent integration is added
+@cache
+def load_prompt(prompt_name: str) -> str:
+    """Load prompt from markdown file.
+
+    Args:
+        prompt_name: Name of the prompt file (without .md extension)
+
+    Returns:
+        Content of the prompt file
+
+    Raises:
+        FileNotFoundError: If prompt file doesn't exist
+    """
+    prompt_path = Path(__file__).parent / "prompts" / f"{prompt_name}.md"
+
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+
+    return prompt_path.read_text(encoding="utf-8")
+
+
+@cache
+def create_app_agent(model: str) -> Agent[None, JobAppDraftBase]:
+    """Create and cache an application writer agent for the given model.
+
+    Args:
+        model: Model name (e.g., 'gemini-2.5-flash', 'claude-sonnet-4.5')
+
+    Returns:
+        Configured PydanticAI agent
+    """
+    system_prompt = load_prompt("application-writer")
+
+    return Agent(
+        model=model,
+        output_type=JobAppDraftBase,
+        system_prompt=system_prompt,
+    )
+
+
+def read_source_file(path: str) -> dict:
+    """Read a TOML/YAML source file and extract the content.
+
+    Args:
+        path: Path to the source file
+
+    Returns:
+        Dictionary with the parsed content
+
+    Raises:
+        typer.Exit: If file cannot be read or parsed
+    """
+    import tomllib
+
+    import yaml
+
+    file_path = Path(path).expanduser()
+
+    if not file_path.exists():
+        error(f"Source file not found: {file_path}")
+        raise typer.Exit(1)
+
+    try:
+        if path.endswith(".toml"):
+            with open(file_path, "rb") as f:
+                data = tomllib.load(f)
+        else:
+            content = file_path.read_text(encoding="utf-8")
+            data = yaml.safe_load(content)
+
+        return data
+    except Exception as e:
+        error(f"Failed to parse {file_path}: {e}")
+        raise typer.Exit(1)
 
 
 @app.command(name="ls")
@@ -93,20 +170,16 @@ def list_drafts(
 def write(
     ctx: typer.Context,
     job_id: int = typer.Argument(..., help="Job ID to generate application for"),
-    cv: bool = typer.Option(True, "--cv/--no-cv", help="Generate CV"),
-    letter: bool = typer.Option(
-        True, "--letter/--no-letter", help="Generate cover letter"
+    no_cv: bool = typer.Option(False, "--no-cv", help="Skip CV generation"),
+    no_letter: bool = typer.Option(
+        False, "--no-letter", help="Skip cover letter generation"
     ),
-    model: str = typer.Option(
-        None, "--model", "-m", help="AI model to use (from config if not specified)"
-    ),
-    cv_source: str = typer.Option(
-        None, "--cv-source", help="CV source file path (from config if not specified)"
-    ),
+    model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
+    cv_source: str = typer.Option(None, "--cv-source", help="CV source file path"),
     letter_source: str = typer.Option(
         None,
         "--letter-source",
-        help="Letter source file path (from config if not specified)",
+        help="Letter source file path",
     ),
 ) -> None:
     """
@@ -122,8 +195,11 @@ def write(
     """
     app_ctx: AppContext = ctx.obj
 
-    if not cv and not letter:
-        error("Must generate at least one document (--cv or --letter)")
+    gen_cv = not no_cv
+    gen_letter = not no_letter
+
+    if not gen_cv and not gen_letter:
+        error("Must generate at least one document")
         raise typer.Exit(1)
 
     # Get job from database
@@ -133,35 +209,140 @@ def write(
             error(f"No job found with ID: {job_id}")
             raise typer.Exit(1)
 
-        # Determine model
+        # Determine model (CLI > app-specific config > global config)
         final_model = app_ctx.config.get_model(
-            model or getattr(app_ctx.config, "app", None) and app_ctx.config.app.model
+            model or getattr(app_ctx.config.app, "model", None)
         )
 
-        # TODO: Read source files, call AI agent, store results
-        # For now, create a placeholder draft
-        console.print(
-            "[yellow]TODO: Implement AI agent for document generation[/yellow]"
+        # Determine source paths
+        final_cv_source = cv_source or getattr(
+            app_ctx.config.app.write.cv, "source", None
         )
-        console.print(f"[dim]Model: {final_model}[/dim]")
-        console.print(f"[dim]Generate CV: {cv}[/dim]")
-        console.print(f"[dim]Generate Letter: {letter}[/dim]")
+        final_letter_source = letter_source or getattr(
+            app_ctx.config.app.write.letter, "source", None
+        )
 
-        # Create draft record (placeholder)
+        # Read source files
+        cv_data = None
+        letter_data = None
+
+        if gen_cv:
+            if not final_cv_source:
+                error("Must provide --cv or set [job.app.write.cv] field in job.toml")
+                raise typer.Exit(1)
+
+            with console.status("[bold dim]Reading CV source file...[/bold dim]"):
+                cv_data = read_source_file(final_cv_source)
+                console.print(f"[dim]Loaded CV from {final_cv_source}[/dim]")
+
+        if gen_letter:
+            if not final_letter_source:
+                error(
+                    "Must provide --letter or set [job.app.write.letter] field in job.toml"
+                )
+                raise typer.Exit(1)
+
+            with console.status(
+                "[bold dim]Reading cover letter source file...[/bold dim]"
+            ):
+                letter_data = read_source_file(final_letter_source)
+                console.print(f"[dim]Loaded letter from {final_letter_source}[/dim]")
+
+        # Create agent
+        agent = create_app_agent(final_model)
+
+        # Build prompt
+        prompt_parts = [
+            "JOB POSTING:",
+            f"URL: {job.job_posting_url}",
+            f"Title: {job.title}",
+            f"Company: {job.company}",
+            f"Location: {job.location}",
+            f"Department: {job.department}",
+            f"Deadline: {job.deadline}",
+            "",
+            "Full Job Description:",
+            f"{job.full_ad}",
+            "",
+        ]
+
+        if cv_data:
+            import json
+
+            prompt_parts.extend(
+                [
+                    "CURRENT CV DATA:",
+                    json.dumps(cv_data, indent=2),
+                    "",
+                ]
+            )
+
+        if letter_data:
+            import json
+
+            prompt_parts.extend(
+                [
+                    "CURRENT COVER LETTER DATA:",
+                    json.dumps(letter_data, indent=2),
+                    "",
+                ]
+            )
+
+        prompt_parts.append(
+            "Generate tailored application documents for this job posting."
+        )
+        prompt = "\n".join(prompt_parts)
+
+        # Run agent
+        with console.status(
+            f"[bold dim]Generating application with {final_model}...[/bold dim]"
+        ):
+            try:
+                result = agent.run_sync(prompt)
+                draft_data = result.output
+            except ValidationError as e:
+                error(f"AI returned invalid data: {e}")
+                raise typer.Exit(1)
+            except UnexpectedModelBehavior as e:
+                error(f"AI model behaved unexpectedly: {e}")
+                raise typer.Exit(1)
+            except ModelRetry as e:
+                error(f"AI model failed after retries: {e}")
+                raise typer.Exit(1)
+            except Exception as e:
+                error(f"Failed to generate application: {e}")
+                raise typer.Exit(1)
+
+        # Store draft
         draft = JobAppDraft(
             job_id=job.id,
             model_name=final_model,
-            cv_content="# Placeholder CV content" if cv else None,
-            letter_content="# Placeholder letter content" if letter else None,
-            source_cv_path=cv_source,
-            source_letter_path=letter_source,
+            cv_content=draft_data.cv_content if gen_cv else None,
+            letter_content=draft_data.letter_content if gen_letter else None,
+            source_cv_path=final_cv_source if gen_cv else None,
+            source_letter_path=final_letter_source if gen_letter else None,
+            notes=draft_data.notes,
         )
 
         session.add(draft)
         session.commit()
         session.refresh(draft)
 
-        console.print(f"[green]✓[/green] Created draft {draft.id} for job {job_id}")
+        # Display success
+        console.print()
+        console.print(
+            f"[green]✓[/green] Generated draft {draft.id} for job {job_id}: {job.title}"
+        )
+        if draft.cv_content:
+            console.print(f"  [dim]• CV tailored ({len(draft.cv_content)} chars)[/dim]")
+        if draft.letter_content:
+            console.print(
+                f"  [dim]• Cover letter tailored ({len(draft.letter_content)} chars)[/dim]"
+            )
+        if draft.notes:
+            console.print(f"  [dim]• Notes: {draft.notes[:100]}...[/dim]")
+        console.print()
+        console.print(f"[dim]View with: job app view {job_id} -i {draft.id}[/dim]")
 
 
 @app.command(name="v", hidden=True)
