@@ -16,6 +16,7 @@ dependencies = [
   "sqlmodel>=0.0.31",
   "structlog>=24.1.0",
   "tomli>=2.0.0",
+  "tomli-w>=1.0.0",
   "typer>=0.21.1",
 ]
 

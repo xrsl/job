@@ -44,28 +44,12 @@ package job
 	output?:          string
 }
 
-// App write CV settings
-#JobAppWriteCv: {
-	source?: string
-}
-
-// App write letter settings
-#JobAppWriteLetter: {
-	source?: string
-	schema?: string
-}
-
-// App write settings
-#JobAppWrite: {
-	cv?:     #JobAppWriteCv
-	letter?: #JobAppWriteLetter
-}
-
 // App command settings
 #JobApp: {
 	model?:  string
 	schema?: string
-	write?:  #JobAppWrite
+	cv?:     string
+	letter?: string
 }
 
 // Top-level job settings

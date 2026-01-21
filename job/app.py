@@ -215,11 +215,9 @@ def write(
         )
 
         # Determine source paths
-        final_cv_source = cv_source or getattr(
-            app_ctx.config.app.write.cv, "source", None
-        )
+        final_cv_source = cv_source or getattr(app_ctx.config.app, "cv", None)
         final_letter_source = letter_source or getattr(
-            app_ctx.config.app.write.letter, "source", None
+            app_ctx.config.app, "letter", None
         )
 
         # Read source files
@@ -228,7 +226,7 @@ def write(
 
         if gen_cv:
             if not final_cv_source:
-                error("Must provide --cv or set [job.app.write.cv] field in job.toml")
+                error("Must provide --cv-source or set job.app.cv in job.toml")
                 raise typer.Exit(1)
 
             with console.status("[bold dim]Reading CV source file...[/bold dim]"):
@@ -237,9 +235,7 @@ def write(
 
         if gen_letter:
             if not final_letter_source:
-                error(
-                    "Must provide --letter or set [job.app.write.letter] field in job.toml"
-                )
+                error("Must provide --letter-source or set job.app.letter in job.toml")
                 raise typer.Exit(1)
 
             with console.status(
@@ -427,6 +423,140 @@ def view(
             )
 
         console.print()
+
+
+@app.command(name="a", hidden=True)
+@app.command()
+def apply(
+    ctx: typer.Context,
+    job_id: int = typer.Argument(..., help="Job ID"),
+    draft_id: int = typer.Option(..., "-i", "--id", help="Draft ID to apply"),
+    cv_dest: str = typer.Option(None, "--cv-dest", help="CV destination file path"),
+    letter_dest: str = typer.Option(
+        None, "--letter-dest", help="Letter destination file path"
+    ),
+) -> None:
+    """
+    Apply AI-generated content back to source files. (Alias: a)
+
+    Writes the CV/letter content from a draft back to the source TOML/YAML files.
+    Similar to cvx build's write-back functionality.
+
+    Examples:
+        job app apply 42 -i 1
+        job app a 42 -i 1 --cv-dest src/tailored-cv.toml
+    """
+    import json
+
+    app_ctx: AppContext = ctx.obj
+
+    with Session(app_ctx.engine) as session:
+        # Get the draft
+        draft = session.get(JobAppDraft, draft_id)
+        if not draft or draft.job_id != job_id:
+            error(f"No draft found with ID {draft_id} for job {job_id}")
+            raise typer.Exit(1)
+
+        # Determine destination paths
+        final_cv_dest = cv_dest or draft.source_cv_path
+        final_letter_dest = letter_dest or draft.source_letter_path
+
+        # Write CV if present
+        if draft.cv_content:
+            if not final_cv_dest:
+                error("No CV destination path specified and none in draft")
+                raise typer.Exit(1)
+
+            try:
+                cv_data = json.loads(draft.cv_content)
+                # If data is already wrapped in {"cv": ...}, extract it
+                if "cv" in cv_data and len(cv_data) == 1:
+                    cv_data = cv_data["cv"]
+                _write_source_file(final_cv_dest, cv_data, "cv")
+                console.print(f"[green]✓[/green] CV applied to {final_cv_dest}")
+            except json.JSONDecodeError as e:
+                error(f"Failed to parse CV JSON: {e}")
+                console.print(
+                    "[dim]The stored CV content appears to be malformed.[/dim]"
+                )
+                console.print(
+                    "[dim]Try regenerating with: job app w {job_id} --no-letter[/dim]"
+                )
+                raise typer.Exit(1)
+            except Exception as e:
+                error(f"Failed to write CV: {e}")
+                raise typer.Exit(1)
+
+        # Write letter if present
+        if draft.letter_content:
+            if not final_letter_dest:
+                error("No letter destination path specified and none in draft")
+                raise typer.Exit(1)
+
+            try:
+                letter_data = json.loads(draft.letter_content)
+                # If data is already wrapped in {"letter": ...}, extract it
+                if "letter" in letter_data and len(letter_data) == 1:
+                    letter_data = letter_data["letter"]
+                _write_source_file(final_letter_dest, letter_data, "letter")
+                console.print(f"[green]✓[/green] Letter applied to {final_letter_dest}")
+            except json.JSONDecodeError as e:
+                error(f"Failed to parse letter JSON: {e}")
+                console.print(
+                    "[dim]The stored letter content appears to be malformed.[/dim]"
+                )
+                console.print(
+                    "[dim]Try regenerating with: job app w {job_id} --no-cv[/dim]"
+                )
+                raise typer.Exit(1)
+            except Exception as e:
+                error(f"Failed to write letter: {e}")
+                raise typer.Exit(1)
+
+        if not draft.cv_content and not draft.letter_content:
+            console.print("[yellow]No content to apply[/yellow]")
+
+
+def _write_source_file(path: str, data: dict, field_name: str) -> None:
+    """Write structured data back to TOML/YAML file.
+
+    Args:
+        path: Destination file path
+        data: Dictionary data to write
+        field_name: Root field name (e.g., 'cv', 'letter')
+
+    Similar to cvx build's writeData function.
+    """
+    import shutil
+    import subprocess
+
+    import yaml
+
+    file_path = Path(path).expanduser()
+
+    # Wrap data in field name
+    wrapper = {field_name: data}
+
+    # Detect format and marshal
+    if path.endswith(".toml"):
+        # Python's tomllib doesn't support writing, use tomli_w
+        try:
+            import tomli_w
+
+            content = tomli_w.dumps(wrapper)
+        except ImportError:
+            error("tomli_w package required for writing TOML files")
+            raise typer.Exit(1)
+    else:
+        content = yaml.dump(wrapper, default_flow_style=False, sort_keys=False)
+
+    # Write to file
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content, encoding="utf-8")
+
+    # Auto-format TOML with tombi if available
+    if path.endswith(".toml") and shutil.which("tombi"):
+        subprocess.run(["tombi", "format", str(file_path)], check=False)
 
 
 @app.command()

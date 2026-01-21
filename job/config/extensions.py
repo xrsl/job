@@ -97,31 +97,8 @@ class JobGH(models.JobGH):
     model_config = models.JobGH.model_config | {"populate_by_name": True}
 
 
-class JobAppWriteCv(models.JobAppWriteCv):
-    """Extended JobAppWriteCv with better defaults."""
-
-    model_config = models.JobAppWriteCv.model_config | {"populate_by_name": True}
-
-
-class JobAppWriteLetter(models.JobAppWriteLetter):
-    """Extended JobAppWriteLetter with better defaults."""
-
-    model_config = models.JobAppWriteLetter.model_config | {"populate_by_name": True}
-
-
-class JobAppWrite(models.JobAppWrite):
-    """Extended JobAppWrite with better defaults."""
-
-    cv: JobAppWriteCv = Field(default_factory=JobAppWriteCv)
-    letter: JobAppWriteLetter = Field(default_factory=JobAppWriteLetter)
-
-    model_config = models.JobAppWrite.model_config | {"populate_by_name": True}
-
-
 class JobApp(models.JobApp):
     """Extended JobApp with better defaults."""
-
-    write: JobAppWrite = Field(default_factory=JobAppWrite)
 
     model_config = models.JobApp.model_config | {"populate_by_name": True}
 
