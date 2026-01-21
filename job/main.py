@@ -74,6 +74,7 @@ from job.search import app as search_app  # noqa: E402
 from job.add import app as add_app  # noqa: E402
 from job.commands import app as commands_app  # noqa: E402
 from job.fit import app as fit_app  # noqa: E402
+from job.db_app import app as db_app  # noqa: E402
 
 # Merge all sub-apps at root level for flat command structure
 app.add_typer(search_app)
@@ -85,3 +86,6 @@ app.add_typer(fit_app, name="fit", help="Job fit assessment commands")
 app.add_typer(
     fit_app, name="f", help="Job fit assessment commands (alias)", hidden=True
 )
+
+# Register db as a command group (not flat, to support subcommands)
+app.add_typer(db_app, name="db", help="Job database management commands")
