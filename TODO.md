@@ -43,4 +43,4 @@ cv = "src/cv.toml"
 extra = ["persona.md", "experience.md"]
 j
 
-ob fit --cv cv.pdf --extra persona.md
+job fit --cv cv.pdf --extra persona.md
