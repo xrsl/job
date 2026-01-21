@@ -255,7 +255,7 @@ job gh c -a 5                 # comment
 Create `job.toml` to set defaults for all commands ([tombi VSCode Extension](https://tombi-toml.github.io/tombi/docs/editors/vscode-extension) recommended for schema validation):
 
 ```toml
-#:schema https://raw.githubusercontent.com/xrsl/job/v0.5.0/schema/schema.json
+#:schema https://raw.githubusercontent.com/xrsl/job/v0.6.0/schema/schema.json
 
 # Global settings
 [job]
