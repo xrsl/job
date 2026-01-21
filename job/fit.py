@@ -16,7 +16,9 @@ console = Console()
 
 # Create sub-app for fit commands
 # Set invoke_without_command=True to allow both direct invocation and subcommands
-app = typer.Typer(invoke_without_command=True)
+app = typer.Typer(
+    invoke_without_command=True, help="Job fit assessment commands (Alias: f)"
+)
 
 
 @cache

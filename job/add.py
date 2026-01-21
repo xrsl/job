@@ -133,7 +133,7 @@ def _build_job_data(
 
 
 @app.command(name="a", hidden=True)
-@app.command()
+@app.command(name="add")
 def add(
     ctx: typer.Context,
     url: str = typer.Argument(..., help="Job posting URL"),
