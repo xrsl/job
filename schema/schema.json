@@ -63,14 +63,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "context": {
+        "cv": {
+          "type": "string"
+        },
+        "extra": {
           "type": "array",
           "items": {
             "type": "string"
           }
-        },
-        "cv": {
-          "type": "string"
         },
         "model": {
           "type": "string"

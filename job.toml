@@ -21,7 +21,7 @@
 [job.fit]
 # cv = "~/Documents/cv.md"                # Default CV path
 # model = "gemini-2.0-flash-exp"          # Override model for fit assessments
-# context = ["~/Documents/cover-letter.md"]  # Additional context files
+# extra = ["~/Documents/cover-letter.md"]  # Additional context files
 
 # Add command defaults
 [job.add]

@@ -83,7 +83,7 @@ class JobExport(models.JobExport):
 class JobFit(models.JobFit):
     """Extended JobFit with better defaults."""
 
-    context: list[str] = Field(default_factory=list)
+    extra: list[str] = Field(default_factory=list)
 
     model_config = models.JobFit.model_config | {"populate_by_name": True}
 

@@ -34,7 +34,7 @@ job export --format csv -o applications.csv
 
 ```bash
 # Assess a job against your CV and experience
-job fit --id 1 --context cv.toml --context reference/
+job fit 42 --cv cv.pdf --extra persona.md --extra experience.md
 
 # View saved assessments
 job fit view --id 1
@@ -62,7 +62,7 @@ Evaluate how well job postings match your background using AI-powered analysis.
 job add https://example.com/senior-engineer
 
 # 2. Assess fit against your CV
-job fit --id 1 --context ~/cv.toml
+job fit 1 --cv ~/cv.toml
 
 # 3. View the assessment
 #    - Overall fit score (0-100)
@@ -73,36 +73,31 @@ job fit --id 1 --context ~/cv.toml
 
 ### Context Files
 
-The `--context` flag accepts **any file format**:
-
-- **Individual files**: `.md`, `.toml`, `.txt`, `.pdf`, `.tex`, `.yaml`, `.json`, etc.
-- **Directories**: Recursively reads all files (UTF-8 text files; skips binaries)
-- **Multiple paths**: Mix files and directories
+Provide your CV with `--cv` and additional context with `--extra/-e`. Both flags accept **any file format** (`.md`, `.toml`, `.txt`, `.pdf`, `.tex`, `.yaml`, `.json`, etc.):
 
 ```bash
-# Single file (any format)
-job fit --id 1 --context cv.toml
-job fit --id 1 --context resume.pdf
+# CV only
+job fit 1 --cv cv.pdf
 
-# Multiple files (mixed formats)
-job fit --id 1 --context cv.toml --context experience.md --context paper.pdf
+# CV with extra context files
+job fit 1 --cv cv.toml --extra experience.md
 
-# Directory (recursive, all files)
-job fit --id 1 --context reference/
+# Multiple extra files (any format)
+job fit 1 --cv cv.pdf --extra persona.md --extra experience.md --extra paper.pdf
 
-# Mix of both
-job fit --id 1 --context cv.toml --context reference/ --context resume.pdf
+# Using short flag
+job fit 1 --cv cv.pdf -e persona.md -e experience.md
 ```
 
-**Note:** Binary files in directories are automatically skipped with a warning.
+**Note:** Each file must be provided individually; directory support has been removed.
 
 ### Model Selection
 
 Override the default model with `--model` / `-m`:
 
 ```bash
-job fit --id 1 --context cv.toml -m claude-sonnet-4.5
-job fit --id 1 --context cv.toml -m gemini-2.5-flash
+job fit 1 --cv cv.toml -m claude-sonnet-4.5
+job fit 1 --cv cv.toml -m gemini-2.5-flash
 ```
 
 ### Managing Assessments
@@ -231,13 +226,13 @@ job add https://example.com/senior-engineer
 job gh issue --id 1 --repo myuser/job-hunt
 
 # 3. Assess fit
-job fit --id 1 --context cv.toml
+job fit 1 --cv cv.toml
 
 # 4. Post assessment (auto-detects repo/issue from step 2)
 job gh comment -a 1
 
 # 5. Update CV and reassess
-job fit --id 1 --context cv.toml
+job fit 1 --cv cv.toml
 
 # 6. Post updated assessment
 job gh comment -a 2
@@ -273,7 +268,7 @@ repo = "xrsl/cv"  # Default repository for gh commands
 [job.fit]
 cv = "~/Documents/cv.md"  # Default CV path
 # model = "gemini-2.0-flash-exp"  # Override model for fit
-# context = ["~/Documents/cover-letter.md"]  # Additional context
+# extra = ["~/Documents/cover-letter.md"]  # Additional context
 
 # Add command defaults
 [job.add]
@@ -310,7 +305,7 @@ extra-keywords = ["fintech", "payments"]  # Merge with defaults
 
 Settings are applied in this order (highest to lowest priority):
 
-1. **CLI flags** – `--repo`, `--model`, `--context`, etc.
+1. **CLI flags** – `--repo`, `--model`, `--cv`, `--extra`, etc.
 2. **Environment variables** – `JOB_MODEL`, `JOB_DB_PATH`
 3. **job.toml** – Config file defaults
 4. **Hardcoded defaults** – Built-in fallbacks
@@ -337,9 +332,9 @@ job gh issue --id 2 --repo other/repo  # Override with CLI flag
 **Use fit defaults:**
 
 ```bash
-# job.toml: [job.fit] cv = "~/cv.md", context = ["~/cover.md"]
-job fit --id 1  # Uses cv and context from config
-job fit --id 1 --context extra.md  # Merges with config
+# job.toml: [job.fit] cv = "~/cv.md", extra = ["~/cover.md"]
+job fit 1  # Uses cv and extra from config
+job fit 1 --extra personal.md  # Merges with config
 ```
 
 **Use add defaults:**
@@ -378,8 +373,7 @@ job rm <url>
 
 ```bash
 # Assess fit
-job fit --id <ID> --context <PATH> [--model MODEL]
-job fit --url <URL> --context <PATH>
+job fit <ID> --cv <PATH> [--extra <PATH>] [--model MODEL]
 
 # View assessments
 job fit view -i <JOB_ID>          # List all for job
@@ -390,7 +384,7 @@ job fit rm -a <ASSESSMENT_ID>     # Delete one
 job fit rm -i <JOB_ID>            # Delete all for job
 
 # Aliases: f (fit), v (view)
-job f -i 1 -c cv.toml
+job f 1 --cv cv.toml -e persona.md
 job f v -a 5
 ```
 

@@ -28,7 +28,7 @@ package job
 #JobFit: {
 	cv?:    string
 	model?: string
-	context?: [...string]
+	extra?: [...string]
 }
 
 // Add command settings

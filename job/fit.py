@@ -10,7 +10,7 @@ from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
 from pydantic import ValidationError
 
 from job.core import AppContext, JobAd, JobFitAssessment, JobFitAssessmentBase
-from job.utils import error, validate_url
+from job.utils import error
 
 console = Console()
 
@@ -45,11 +45,10 @@ def load_prompt(prompt_name: str) -> str:
 def read_context_files(context_paths: list[str]) -> tuple[str, list[str]]:
     """Read multiple context files and combine their contents.
 
-    Supports both individual files and directories (scanned recursively).
-    Directories will read all files, attempting to decode as UTF-8 text.
+    Supports individual files only (any file type including PDFs).
 
     Args:
-        context_paths: List of file or directory paths to read
+        context_paths: List of file paths to read
 
     Returns:
         Tuple of (combined_content, valid_paths)
@@ -64,45 +63,26 @@ def read_context_files(context_paths: list[str]) -> tuple[str, list[str]]:
         path = Path(path_str).expanduser()
 
         if not path.exists():
-            error(f"Context path not found: {path}")
+            error(f"File not found: {path}")
             raise typer.Exit(1)
 
-        # Collect files to read
-        files_to_read = []
-
-        if path.is_file():
-            files_to_read.append(path)
-        elif path.is_dir():
-            # Recursively find all files (not directories)
-            files_to_read = [f for f in path.rglob("*") if f.is_file()]
-
-            if not files_to_read:
-                error(f"No files found in directory: {path}")
-                raise typer.Exit(1)
-        else:
-            error(f"Context path is neither a file nor directory: {path}")
+        if not path.is_file():
+            error(f"Path is not a file: {path}")
             raise typer.Exit(1)
 
-        # Read all collected files
-        for file_path in files_to_read:
-            try:
-                content = file_path.read_text(encoding="utf-8")
-                # Use relative path from original input for better readability
-                if path.is_dir():
-                    display_name = str(file_path.relative_to(path.parent))
-                else:
-                    display_name = file_path.name
-                combined_content.append(f"=== {display_name} ===\n{content}\n")
-                valid_paths.append(str(file_path.absolute()))
-            except UnicodeDecodeError:
-                # Skip binary files silently
-                console.print(
-                    f"[dim]Skipped binary file: {file_path.name}[/dim]", style="yellow"
-                )
-                continue
-            except Exception as e:
-                error(f"Failed to read {file_path}: {e}")
-                raise typer.Exit(1)
+        try:
+            content = path.read_text(encoding="utf-8")
+            combined_content.append(f"=== {path.name} ===\n{content}\n")
+            valid_paths.append(str(path.absolute()))
+        except UnicodeDecodeError:
+            # For binary files (like PDFs), skip with a note
+            console.print(
+                f"[dim]Skipped binary file: {path.name}[/dim]", style="yellow"
+            )
+            continue
+        except Exception as e:
+            error(f"Failed to read {path}: {e}")
+            raise typer.Exit(1)
 
     return "\n".join(combined_content), valid_paths
 
@@ -243,13 +223,17 @@ def display_fit_assessment(
 @app.callback(invoke_without_command=True)
 def fit(
     ctx: typer.Context,
-    url: str = typer.Option(None, "--url", "-u", help="Job posting URL"),
-    job_id: int = typer.Option(None, "--id", "-i", help="Job ID from database"),
-    context: list[str] = typer.Option(
+    job_id: int = typer.Argument(None, help="Job ID from database"),
+    cv: str = typer.Option(
         None,
-        "--context",
-        "-c",
-        help="Context file or directory paths (from config if not specified)",
+        "--cv",
+        help="CV file path (from config if not specified)",
+    ),
+    extra: list[str] = typer.Option(
+        None,
+        "--extra",
+        "-e",
+        help="Extra context file paths (from config if not specified)",
     ),
     model: str = typer.Option(
         None, "--model", "-m", help="AI model to use (from config if not specified)"
@@ -259,17 +243,13 @@ def fit(
     Assess job fit against candidate context.
 
     Analyzes how well a job matches your background based on CV and other context files.
-    Requires either --url or --id to specify the job, and at least one --context file or directory.
-
-    Context paths can be:
-    - Individual files (any format: .md, .toml, .pdf, .tex, .txt, etc.)
-    - Directories (recursively reads all files, skips binaries)
-    - Mix of both
+    Requires job_id as positional argument. CV and extra files can be provided via flags
+    or from config (job.toml).
 
     Examples:
-        job fit --url example.com --context cv.toml --context EXPERIENCE.md
-        job fit --id 2 --context reference/ -m claude-sonnet-4.5
-        job fit --id 2  # uses context and model from job.toml
+        job fit 42 --cv cv.pdf --extra persona.md --extra experience.md
+        job fit 42 -e reference.md -m claude-sonnet-4.5
+        job fit 42  # uses cv and extra from job.toml
         job fit view --id 2  (view saved assessments)
     """
     # If a subcommand was invoked, don't run the assessment logic
@@ -279,32 +259,25 @@ def fit(
     app_ctx: AppContext = ctx.obj
 
     # Validate job specification
-    if not url and job_id is None:
-        error("Must provide either --url or --id")
+    if job_id is None:
+        error("Must provide job_id as positional argument")
         raise typer.Exit(1)
 
-    if url and job_id is not None:
-        error("Cannot provide both --url and --id")
+    # Build final context list: CV + extra files
+    final_context = []
+
+    # Add CV (CLI > config)
+    final_cv = cv or app_ctx.config.fit.cv
+    if not final_cv:
+        error("Must provide --cv or set cv in [job.fit] section of job.toml")
         raise typer.Exit(1)
+    final_context.append(final_cv)
 
-    # Merge context from CLI and config
-    final_context = list(context) if context else []
-
-    # Add cv from config if specified
-    if app_ctx.config.fit.cv:
-        final_context.append(app_ctx.config.fit.cv)
-
-    # Add additional context from config
-    if app_ctx.config.fit.context:
-        final_context.extend(app_ctx.config.fit.context)
-
-    # Validate we have at least one context source
-    if not final_context:
-        error("Must provide at least one --context file")
-        console.print(
-            "[dim]Provide --context or set [job.fit] cv/context in job.toml[/dim]"
-        )
-        raise typer.Exit(1)
+    # Add extra files (CLI + config)
+    if extra:
+        final_context.extend(extra)
+    if app_ctx.config.fit.extra:
+        final_context.extend(app_ctx.config.fit.extra)
 
     # Determine model (CLI > fit-specific config > global config)
     final_model = app_ctx.config.get_model(model or app_ctx.config.fit.model)
@@ -316,26 +289,11 @@ def fit(
     console.print(f"[dim]Loaded {len(context_paths)} context file(s)[/dim]")
 
     # Get job from database
-    job: JobAd | None = None
-
     with Session(app_ctx.engine) as session:
-        if job_id is not None:
-            # Look up by ID
-            job = session.get(JobAd, job_id)
-            if not job:
-                error(f"No job found with ID: {job_id}")
-                raise typer.Exit(1)
-        else:
-            # Look up by URL
-            final_url = validate_url(url)
-            job = session.exec(
-                select(JobAd).where(JobAd.job_posting_url == final_url)
-            ).first()
-
-            if not job:
-                error(f"Job not found in database: {final_url}")
-                console.print("[dim]Run 'job add <url>' first to add the job[/dim]")
-                raise typer.Exit(1)
+        job = session.get(JobAd, job_id)
+        if not job:
+            error(f"No job found with ID: {job_id}")
+            raise typer.Exit(1)
 
         # Run fit assessment
         agent = create_fit_agent(final_model)
@@ -463,7 +421,7 @@ def view(
         if not assessments:
             error(f"No fit assessments found for job ID {job_id}")
             console.print(
-                f"[dim]Run 'job fit --id {job_id} --context <files>' to create an assessment[/dim]"
+                f"[dim]Run 'job fit {job_id} --cv <cv_file> --extra <files>' to create an assessment[/dim]"
             )
             raise typer.Exit(1)
 

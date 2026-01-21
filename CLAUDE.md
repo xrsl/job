@@ -1,1 +1,3 @@
+- Use `justfile` (read in) recipes for managing the project.
 - Run `just ci` to confirm edits will pass ci.
+- Run `just schema` to build/rebuild `schema.json`
