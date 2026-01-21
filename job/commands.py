@@ -249,20 +249,3 @@ def export(
         sys.stdout.write(content)
         if not content.endswith("\n"):
             sys.stdout.write("\n")
-
-
-@app.command(name="dbinfo")
-def dbinfo(ctx: typer.Context) -> None:
-    """Show database location and statistics."""
-    app_ctx: AppContext = ctx.obj
-    db_path = app_ctx.config.get_db_path()
-
-    with Session(app_ctx.engine) as session:
-        count = len(session.exec(select(JobAd)).all())
-
-    typer.echo(f"Database: {db_path}")
-    typer.echo(f"Total jobs: {count}")
-
-    if db_path.exists():
-        size_kb = db_path.stat().st_size / 1024
-        typer.echo(f"Database size: {size_kb:.1f} KB")
