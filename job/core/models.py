@@ -28,6 +28,12 @@ class JobAd(JobAdBase, table=True):
     company: str = Field(index=True)
     location: str = Field(index=True)
 
+    # GitHub metadata (optional, set when posted as issue)
+    github_repo: str | None = Field(default=None, index=True)
+    github_issue_number: int | None = Field(default=None)
+    github_issue_url: str | None = Field(default=None)
+    posted_at: datetime | None = Field(default=None)
+
     fit_assessments: list["JobFitAssessment"] = Relationship(back_populates="job")
 
 

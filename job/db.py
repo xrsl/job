@@ -102,3 +102,46 @@ def delete(
     except Exception as e:
         error(f"Failed to delete database: {e}")
         raise typer.Exit(1)
+
+
+@app.command()
+def migrate(ctx: typer.Context) -> None:
+    """
+    Migrate database schema to latest version.
+
+    Adds new columns to existing tables if they don't exist.
+    Safe to run multiple times (idempotent).
+
+    Examples:
+        job db migrate
+    """
+    app_ctx: AppContext = ctx.obj
+
+    with console.status("[bold dim]Migrating database schema...[/bold dim]"):
+        # Get raw connection to execute ALTER TABLE statements
+        with app_ctx.engine.connect() as conn:
+            # Check if github_repo column exists
+            result = conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM pragma_table_info('jobad') WHERE name='github_repo'"
+            )
+            has_github_fields = result.scalar() > 0
+
+            if not has_github_fields:
+                # Add GitHub metadata columns
+                conn.exec_driver_sql("ALTER TABLE jobad ADD COLUMN github_repo VARCHAR")
+                conn.exec_driver_sql(
+                    "ALTER TABLE jobad ADD COLUMN github_issue_number INTEGER"
+                )
+                conn.exec_driver_sql(
+                    "ALTER TABLE jobad ADD COLUMN github_issue_url VARCHAR"
+                )
+                conn.exec_driver_sql("ALTER TABLE jobad ADD COLUMN posted_at DATETIME")
+                conn.commit()
+
+                console.print(
+                    "[green]✓[/green] Added GitHub metadata columns to jobad table"
+                )
+            else:
+                console.print("[dim]Database schema is already up to date[/dim]")
+
+    console.print("[green]✓[/green] Migration complete")

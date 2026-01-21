@@ -38,9 +38,17 @@ job fit --id 1 --context cv.toml --context reference/
 
 # View saved assessments
 job fit view --id 1
+```
 
-# Post assessment to GitHub issue
-job fit post -a 5 --issue 45 --repo owner/repo
+**5. GitHub Integration** – Create issues and post assessments
+
+```bash
+# Create GitHub issue from job
+job gh issue --id 1 --repo owner/repo
+
+# Post assessment as comment
+job gh comment -a 5 --repo owner/repo --issue 12
+job gh comment -a 5  # auto-detect repo/issue from job
 ```
 
 ## Job Fit Assessment
@@ -121,22 +129,6 @@ job fit rm -a 5
 job fit rm -i 1
 ```
 
-**Post to GitHub:**
-
-Share assessments as formatted comments on GitHub issues:
-
-```bash
-# Post assessment to issue
-job fit post -a 5 --issue 45 --repo owner/repo
-
-# The comment includes:
-# - Job details with clickable link
-# - Fit score and summary
-# - Strengths and gaps as bullet lists
-# - Recommendations and insights
-# - Collapsible metadata (model, context files, timestamp)
-```
-
 ### Aliases
 
 All fit commands support short aliases:
@@ -144,7 +136,6 @@ All fit commands support short aliases:
 ```bash
 job f --id 1 -c cv.toml              # fit
 job f v -a 5                         # view
-job f p -a 5 --issue 45 --repo x/y   # post
 ```
 
 ### Assessment Output
@@ -180,6 +171,79 @@ This allows you to:
 - Track how your fit changes as you update your CV
 - Compare assessments from different models
 - Maintain a history of all job evaluations
+
+## GitHub Integration
+
+Create GitHub issues from job postings and share fit assessments as comments.
+
+### Creating Issues
+
+Convert job postings into GitHub issues for tracking:
+
+```bash
+# Create issue from job
+job gh issue --id 1 --repo owner/repo
+job gh i --url https://example.com/job --repo owner/repo
+
+# Recreate issue (if already posted)
+job gh issue --id 1 --repo owner/repo --force
+```
+
+**What gets posted:**
+- Issue title: `{job.title} at {job.company}`
+- Issue body: Full job description with metadata (location, deadline, etc.)
+- Job metadata is saved to database (prevents duplicate posting)
+
+### Posting Assessments
+
+Share fit assessments as formatted markdown comments:
+
+```bash
+# Post with explicit repo and issue
+job gh comment -a 5 --repo owner/repo --issue 12
+
+# Auto-detect from job metadata (if job was posted via 'job gh issue')
+job gh comment -a 5
+
+# Mix: auto-detect repo, specify issue
+job gh comment -a 5 --issue 12
+```
+
+**Comment format includes:**
+- Job details with clickable link
+- Overall fit score (0-100) with color coding
+- Strengths and gaps as bullet lists
+- Recommendations and insights
+- Collapsible metadata (model, context files, timestamp)
+
+### Workflow Example
+
+```bash
+# 1. Add job to database
+job add https://example.com/senior-engineer
+
+# 2. Create GitHub issue
+job gh issue --id 1 --repo myuser/job-hunt
+
+# 3. Assess fit
+job fit --id 1 --context cv.toml
+
+# 4. Post assessment (auto-detects repo/issue from step 2)
+job gh comment -a 1
+
+# 5. Update CV and reassess
+job fit --id 1 --context cv.toml
+
+# 6. Post updated assessment
+job gh comment -a 2
+```
+
+### Aliases
+
+```bash
+job gh i --id 1 --repo x/y    # issue
+job gh c -a 5                 # comment
+```
 
 ## Configuration
 
@@ -245,13 +309,34 @@ job fit view -a <ASSESSMENT_ID>   # View specific
 job fit rm -a <ASSESSMENT_ID>     # Delete one
 job fit rm -i <JOB_ID>            # Delete all for job
 
-# Post to GitHub
-job fit post -a <ID> --issue <NUM> --repo <OWNER/REPO>
-
-# Aliases: f (fit), v (view), p (post)
+# Aliases: f (fit), v (view)
 job f -i 1 -c cv.toml
 job f v -a 5
-job f p -a 5 --issue 45 --repo user/repo
+```
+
+### GitHub Integration
+
+```bash
+# Create issue from job
+job gh issue --id <ID> --repo <OWNER/REPO>
+job gh issue --url <URL> --repo <OWNER/REPO>
+
+# Post assessment as comment
+job gh comment -a <ASSESSMENT_ID> --repo <OWNER/REPO> --issue <NUM>
+job gh comment -a <ASSESSMENT_ID>  # auto-detect repo/issue
+
+# Aliases: i (issue), c (comment)
+job gh i --id 1 --repo user/repo
+job gh c -a 5
+```
+
+### Database
+
+```bash
+job db path       # Show database path
+job db stats      # Show statistics
+job db migrate    # Migrate schema to latest version
+job db del        # Delete database
 ```
 
 ## Architecture

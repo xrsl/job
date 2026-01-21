@@ -14,6 +14,7 @@ from job.add import app as add_app
 from job.commands import app as commands_app
 from job.fit import app as fit_app
 from job.db import app as db_app
+from job.gh import app as gh_app
 
 console = Console()
 
@@ -83,3 +84,4 @@ app.add_typer(commands_app)
 app.add_typer(db_app, name="db")
 app.add_typer(fit_app, name="fit")
 app.add_typer(fit_app, name="f", hidden=True)
+app.add_typer(gh_app, name="gh")
