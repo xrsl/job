@@ -73,7 +73,10 @@ def issue(
     job_id: int = typer.Option(None, "--id", "-i", help="Job ID from database"),
     url: str = typer.Option(None, "--url", "-u", help="Job posting URL"),
     repo: str = typer.Option(
-        ..., "--repo", "-r", help="GitHub repository (owner/repo)"
+        None,
+        "--repo",
+        "-r",
+        help="GitHub repository (owner/repo, from config if not specified)",
     ),
     force: bool = typer.Option(False, "--force", help="Create even if already posted"),
 ) -> None:
@@ -86,9 +89,16 @@ def issue(
     Examples:
         job gh issue --id 2 --repo xrsl/cv
         job gh i --url https://example.com/job --repo owner/repo
-        job gh i --id 2 --repo xrsl/cv --force  # recreate issue
+        job gh i --id 2  # uses repo from job.toml
     """
     app_ctx: AppContext = ctx.obj
+
+    # Use repo from config if not provided via CLI
+    final_repo = repo or app_ctx.config.gh.repo
+    if not final_repo:
+        error("Repository not specified")
+        console.print("[dim]Provide --repo or set [job.gh] repo in job.toml[/dim]")
+        raise typer.Exit(1)
 
     with Session(app_ctx.engine) as session:
         # Get the job
@@ -124,7 +134,7 @@ def issue(
 
         try:
             # Create issue using gh CLI
-            console.print(f"[dim]Creating issue in {repo}...[/dim]")
+            console.print(f"[dim]Creating issue in {final_repo}...[/dim]")
 
             result = subprocess.run(
                 [
@@ -132,7 +142,7 @@ def issue(
                     "issue",
                     "create",
                     "--repo",
-                    repo,
+                    final_repo,
                     "--title",
                     f"{job.title} at {job.company}",
                     "--body-file",
@@ -157,7 +167,7 @@ def issue(
                 raise typer.Exit(1)
 
             # Update job with GitHub metadata
-            job.github_repo = repo
+            job.github_repo = final_repo
             job.github_issue_number = issue_number
             job.github_issue_url = issue_url
             job.posted_at = datetime.now(timezone.utc)
@@ -166,7 +176,7 @@ def issue(
             session.commit()
 
             console.print(f"[green]✓[/green] Created issue: {issue_url}")
-            console.print(f"[dim]Job ID {job.id} → {repo}#{issue_number}[/dim]")
+            console.print(f"[dim]Job ID {job.id} → {final_repo}#{issue_number}[/dim]")
 
         finally:
             # Clean up temp file

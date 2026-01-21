@@ -1,18 +1,61 @@
 package job
 
+// Career page configuration for job search
 #CareerPage: {
-	company:            string
-	url:                string
-	keywords?:          [...string]
-	"extra-keywords"?:  [...string]
-	enabled?:           bool | *true
+	company: string
+	url:     string
+	keywords?: [...string]
+	"extra-keywords"?: [...string]
+	enabled?: bool | *true
 }
 
+// Job search configuration
 #JobSearch: {
 	keywords: [...string]
+	parallel?: bool
+	since?:    int
 	in: [...#CareerPage]
 }
 
-job: {
-	search: #JobSearch
+// GitHub integration settings
+#JobGH: {
+	repo?: string
+	"default-labels"?: [...string]
+	"auto-assign"?: bool | *false
 }
+
+// Fit assessment settings
+#JobFit: {
+	cv?:    string
+	model?: string
+	context?: [...string]
+}
+
+// Add command settings
+#JobAdd: {
+	structured?: bool | *false
+	browser?:    bool | *false
+	model?:      string
+}
+
+// Export command settings
+#JobExport: {
+	"output-format"?: string | *"json"
+	output?:          string
+}
+
+// Top-level job settings
+#JobSettings: {
+	model?:     string
+	verbose?:   bool | *false
+	"db-path"?: string
+
+	gh?:     #JobGH
+	fit?:    #JobFit
+	add?:    #JobAdd
+	export?: #JobExport
+	search?: #JobSearch
+}
+
+// Root configuration schema
+job: #JobSettings

@@ -71,9 +71,12 @@ def fetch_job_text(url: str, ctx: AppContext, use_browser: bool = False) -> Fetc
         return browser_fetcher.fetch(url)
 
 
-def extract_job_info(url: str, job_text: str, ctx: AppContext) -> JobAdBase:
+def extract_job_info(
+    url: str, job_text: str, ctx: AppContext, model: str | None = None
+) -> JobAdBase:
     """Extract job information using AI agent with error handling."""
-    agent = create_agent(ctx.config.model, ctx.config.SYSTEM_PROMPT)
+    model_name = ctx.config.get_model(model)
+    agent = create_agent(model_name, ctx.config.SYSTEM_PROMPT)
 
     try:
         result = agent.run_sync(
@@ -95,7 +98,11 @@ def extract_job_info(url: str, job_text: str, ctx: AppContext) -> JobAdBase:
 
 
 def _build_job_data(
-    url: str, fetch_result: FetchResult, structured: bool, ctx: AppContext
+    url: str,
+    fetch_result: FetchResult,
+    structured: bool,
+    ctx: AppContext,
+    model: str | None = None,
 ) -> dict:
     """Build job data dict, optionally using AI extraction.
 
@@ -110,11 +117,11 @@ def _build_job_data(
     """
     job_text = fetch_result.content
     if structured:
-        model_name = ctx.config.model
+        model_name = ctx.config.get_model(model)
         with console.status(
             f"[bold dim]Extracting fields using {model_name}...[/bold dim]"
         ):
-            job_info = extract_job_info(url, job_text, ctx)
+            job_info = extract_job_info(url, job_text, ctx, model=model_name)
         job_data = job_info.model_dump()
         job_data["job_posting_url"] = url
     else:
@@ -138,11 +145,19 @@ def add(
     ctx: typer.Context,
     url: str = typer.Argument(..., help="Job posting URL"),
     structured: bool = typer.Option(
-        False, "--structured", "-s", help="Use AI to extract structured fields"
+        None,
+        "--structured",
+        "-s",
+        help="Use AI to extract structured fields (from config if not specified)",
     ),
-    model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
+    model: str = typer.Option(
+        None, "--model", "-m", help="AI model to use (from config if not specified)"
+    ),
     browser: bool = typer.Option(
-        False, "--browser", "-b", help="Use browser automation to fetch the page"
+        None,
+        "--browser",
+        "-b",
+        help="Use browser automation to fetch the page (from config if not specified)",
     ),
 ) -> None:
     """
@@ -153,23 +168,32 @@ def add(
     By default, uses fast static fetching (requests).
     Use --browser to use a full browser (Playwright) for JS-heavy sites.
     Use --structured to extract structured fields (title, company, etc.) via AI.
+
+    Examples:
+        job add https://example.com/job
+        job add https://example.com/job --structured
+        job add https://example.com/job  # uses defaults from job.toml
     """
     app_ctx: AppContext = ctx.obj
-    if model:
-        # Override model if specified (Config is frozen, so create new instance)
-        from dataclasses import replace
 
-        app_ctx.config = replace(app_ctx.config, model=model)
+    # Use config defaults if flags not explicitly provided
+    final_structured = (
+        structured if structured is not None else app_ctx.config.add.structured
+    )
+    final_browser = browser if browser is not None else app_ctx.config.add.browser
+    final_model = app_ctx.config.get_model(model or app_ctx.config.add.model)
 
     final_url = validate_url(url)
     app_ctx.logger.debug(f"Processing URL: {final_url}")
 
     # Fetch job content
     with console.status("[bold dim]Fetching job page...[/bold dim]"):
-        fetch_result = fetch_job_text(final_url, app_ctx, use_browser=browser)
+        fetch_result = fetch_job_text(final_url, app_ctx, use_browser=final_browser)
     app_ctx.logger.debug("job_text_fetched", chars=len(fetch_result.content))
 
-    job_data = _build_job_data(final_url, fetch_result, structured, app_ctx)
+    job_data = _build_job_data(
+        final_url, fetch_result, final_structured, app_ctx, model=final_model
+    )
 
     with Session(app_ctx.engine) as session:
         # Check for existing entry

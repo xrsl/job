@@ -249,9 +249,11 @@ def fit(
         None,
         "--context",
         "-c",
-        help="Context file or directory paths (any format: .md, .pdf, .tex, .toml, etc.). Directories read all files recursively.",
+        help="Context file or directory paths (from config if not specified)",
     ),
-    model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
+    model: str = typer.Option(
+        None, "--model", "-m", help="AI model to use (from config if not specified)"
+    ),
 ) -> None:
     """
     Assess job fit against candidate context.
@@ -267,6 +269,7 @@ def fit(
     Examples:
         job fit --url example.com --context cv.toml --context EXPERIENCE.md
         job fit --id 2 --context reference/ -m claude-sonnet-4.5
+        job fit --id 2  # uses context and model from job.toml
         job fit view --id 2  (view saved assessments)
     """
     # If a subcommand was invoked, don't run the assessment logic
@@ -275,10 +278,7 @@ def fit(
 
     app_ctx: AppContext = ctx.obj
 
-    # Validate arguments (only if running assessment, not subcommand)
-    if not context:
-        error("Must provide at least one --context file")
-        raise typer.Exit(1)
+    # Validate job specification
     if not url and job_id is None:
         error("Must provide either --url or --id")
         raise typer.Exit(1)
@@ -287,19 +287,31 @@ def fit(
         error("Cannot provide both --url and --id")
         raise typer.Exit(1)
 
-    if not context:
+    # Merge context from CLI and config
+    final_context = list(context) if context else []
+
+    # Add cv from config if specified
+    if app_ctx.config.fit.cv:
+        final_context.append(app_ctx.config.fit.cv)
+
+    # Add additional context from config
+    if app_ctx.config.fit.context:
+        final_context.extend(app_ctx.config.fit.context)
+
+    # Validate we have at least one context source
+    if not final_context:
         error("Must provide at least one --context file")
+        console.print(
+            "[dim]Provide --context or set [job.fit] cv/context in job.toml[/dim]"
+        )
         raise typer.Exit(1)
 
-    # Override model if specified
-    if model:
-        from dataclasses import replace
-
-        app_ctx.config = replace(app_ctx.config, model=model)
+    # Determine model (CLI > fit-specific config > global config)
+    final_model = app_ctx.config.get_model(model or app_ctx.config.fit.model)
 
     # Read context files
     with console.status("[bold dim]Reading context files...[/bold dim]"):
-        context_content, context_paths = read_context_files(context)
+        context_content, context_paths = read_context_files(final_context)
 
     console.print(f"[dim]Loaded {len(context_paths)} context file(s)[/dim]")
 
@@ -326,7 +338,7 @@ def fit(
                 raise typer.Exit(1)
 
         # Run fit assessment
-        agent = create_fit_agent(app_ctx.config.model)
+        agent = create_fit_agent(final_model)
 
         prompt = f"""Assess the job fit for this candidate.
 
@@ -347,7 +359,7 @@ CANDIDATE CONTEXT:
 Provide a comprehensive fit assessment."""
 
         with console.status(
-            f"[bold dim]Analyzing fit with {app_ctx.config.model}...[/bold dim]"
+            f"[bold dim]Analyzing fit with {final_model}...[/bold dim]"
         ):
             try:
                 result = agent.run_sync(prompt)
@@ -368,7 +380,7 @@ Provide a comprehensive fit assessment."""
         # Store assessment
         fit_record = JobFitAssessment(
             job_id=job.id,
-            model_name=app_ctx.config.model,
+            model_name=final_model,
             context_file_paths=json.dumps(context_paths),
             overall_fit_score=assessment.overall_fit_score,
             fit_summary=assessment.fit_summary,

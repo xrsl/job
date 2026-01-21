@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from sqlmodel import Session, SQLModel
 
-from job.core import AppContext, Config, JobAd
+from job.core import AppContext, Settings, JobAd
 
 
 @pytest.fixture
@@ -14,18 +14,17 @@ def test_db_path(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def test_config(test_db_path: Path) -> Config:
+def test_config(test_db_path: Path) -> Settings:
     """Provide test configuration."""
-    return Config(
-        model="gemini-2.5-flash",
-        db_path=test_db_path,
-        search_config_path=None,
-        verbose=False,
-    )
+    config = Settings()
+    config.model = "gemini-2.5-flash"
+    config.db_path = str(test_db_path)
+    config.verbose = False
+    return config
 
 
 @pytest.fixture
-def app_context(test_config: Config) -> AppContext:
+def app_context(test_config: Settings) -> AppContext:
     """Provide application context for testing."""
     return AppContext(config=test_config)
 

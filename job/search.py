@@ -13,9 +13,9 @@ from rich.console import Console
 from rich.table import Table
 
 from job.core import AppContext
+from job.config import CareerPage, SearchSettings
 from job.fetchers import AsyncBrowserFetcher, BrowserFetcher, StaticFetcher
 from job.utils import error
-from job.search_config import CareerPage, SearchConfig, load_config
 
 console = Console()
 
@@ -393,7 +393,7 @@ async def scan_page_async(
 
 
 async def scan_all_pages_async(
-    config: SearchConfig,
+    search_settings: SearchSettings,
     ctx: AppContext,
     no_js: bool = False,
     since_days: int | None = None,
@@ -401,9 +401,9 @@ async def scan_all_pages_async(
     """Scan all enabled pages concurrently using native async."""
     tasks = [
         scan_page_async(
-            page, config.get_keywords_for_page(page), ctx, no_js, since_days
+            page, search_settings.get_keywords_for_page(page), ctx, no_js, since_days
         )
-        for page in config.enabled_pages
+        for page in search_settings.enabled_pages
     ]
     return await asyncio.gather(*tasks)
 
@@ -462,7 +462,10 @@ def display_results(results: list[PageScanResult], verbose: bool = False) -> Non
 def search_pages(
     ctx: typer.Context,
     config_path: str = typer.Option(
-        None, "--config", "-c", help="Path to job-search.toml config file"
+        None,
+        "--config",
+        "-c",
+        help="Path to job.toml config file (deprecated, use load order)",
     ),
     keywords: list[str] = typer.Option(
         None,
@@ -488,136 +491,163 @@ def search_pages(
         help="Fast mode: skip JavaScript rendering (may miss dynamic content)",
     ),
     parallel: bool = typer.Option(
-        False,
+        None,
         "--parallel",
         "-p",
-        help="Fetch pages in parallel (faster but uses more resources)",
+        help="Fetch pages in parallel (defaults to config or False)",
     ),
     since: int = typer.Option(
         None,
         "--since",
         "-s",
-        help="Only show jobs posted within this many days (filters by date in content)",
+        help="Only show jobs posted within this many days (defaults to config or None)",
     ),
 ) -> None:
     """
     Search configured career pages for job keywords. (Alias: s)
 
-    Reads career pages from job-search.toml and searches for configured keywords.
+    Reads career pages from job.toml and searches for configured keywords.
     """
-    from pathlib import Path
 
     app_ctx: AppContext = ctx.obj
 
-    # Load configuration
-    try:
-        config = load_config(Path(config_path) if config_path else None)
-    except FileNotFoundError as e:
-        error(str(e))
-        raise typer.Exit(1)
-    except ValueError as e:
-        error(str(e))
-        raise typer.Exit(1)
+    # Get search settings from loaded config
+    search_config = app_ctx.config.search
+
+    if config_path:
+        console.print(
+            "[yellow]Warning: --config flag is deprecated. Config is loaded from standard locations.[/yellow]"
+        )
 
     # Handle keywords: --keyword replaces defaults, --extra appends
+    # We modify the referenced object or create a copy?
+    # Settings are mutable, so we can modify search_config directly for this run.
     if keywords:
-        config.default_keywords = list(keywords)
+        search_config.keywords = list(keywords)
     if extra_keywords:
-        config.default_keywords.extend(extra_keywords)
+        search_config.keywords.extend(extra_keywords)
+
+    # Handle parallel and since overrides
+    final_parallel = (
+        parallel if parallel is not None else (search_config.parallel or False)
+    )
+    final_since = since if since is not None else search_config.since
 
     # Filter to specific pages if requested
     if companies:
         matching_pages = [
             p
-            for p in config.enabled_pages
+            for p in search_config.enabled_pages
             if any(c.lower() in p.company.lower() for c in companies)
         ]
         if not matching_pages:
             error(f"No pages found matching: {', '.join(companies)}")
             console.print("[dim]Available companies:[/dim]")
-            for p in config.enabled_pages:
+            for p in search_config.enabled_pages:
                 console.print(f"  • {p.company}")
             raise typer.Exit(1)
-        config.pages = matching_pages
+        # Create a new list for this run (don't mutate persistent config pages list)
+        pages_to_scan = matching_pages
+    else:
+        pages_to_scan = search_config.enabled_pages
 
-    if not config.enabled_pages:
-        error("No pages configured in job-search.toml")
+    if not pages_to_scan:
+        error("No pages configured in job.toml")
         raise typer.Exit(1)
 
     # Show what we're searching
-    console.print(f"[dim]Config: {config.config_path}[/dim]")
-    company_names = ", ".join(p.company for p in config.enabled_pages)
+    company_names = ", ".join(p.company for p in pages_to_scan)
     console.print(f"[bold]Companies:[/bold] {company_names}")
-    keywords_str = ", ".join(config.default_keywords) or "[dim](none)[/dim]"
+    keywords_str = ", ".join(search_config.keywords) or "[dim](none)[/dim]"
     console.print(f"[bold]Keywords:[/bold] {keywords_str}")
-    if since:
-        console.print(f"[bold]Since:[/bold] {since} day(s) ago")
+    if final_since:
+        console.print(f"[bold]Since:[/bold] {final_since} day(s) ago")
     console.print()
 
-    # Scan pages (parallel or sequential)
-    if parallel:
-        with console.status("[bold]Searching all pages in parallel...[/bold]"):
-            results = asyncio.run(scan_all_pages_async(config, app_ctx, no_js, since))
+    # Temporarily override pages in config so helper methods work
+    original_pages = search_config.pages
+    if companies:
+        # We need to set pages so get_keywords_for_page etc works if we iterated config.pages,
+        # but helper methods take 'page' arg.
+        # scan_all_pages_async iterates config.enabled_pages.
+        # So we should update config.pages to be filtered list.
+        search_config.pages = pages_to_scan
 
-        # Print matches after parallel scan completes
-        for result in results:
-            page = result.page
-            console.print(f"[bold]Searching in {page.company}...[/bold]")
-            positions_found = 0
-            for match in result.matches:
-                for snippet in match.context_snippets:
-                    positions_found += 1
-                    clean_snippet = snippet.strip(".")
+    try:
+        # Scan pages (parallel or sequential)
+        if final_parallel:
+            with console.status("[bold]Searching all pages in parallel...[/bold]"):
+                results = asyncio.run(
+                    scan_all_pages_async(search_config, app_ctx, no_js, final_since)
+                )
+
+            # Print matches after parallel scan completes
+            for result in results:
+                page = result.page
+                console.print(f"[bold]Searching in {page.company}...[/bold]")
+                positions_found = 0
+                for match in result.matches:
+                    for snippet in match.context_snippets:
+                        positions_found += 1
+                        clean_snippet = snippet.strip(".")
+                        console.print(
+                            f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
+                            f"in [link={page.url}][cyan]{clean_snippet}[/cyan][/link]"
+                        )
+                if positions_found > 0:
                     console.print(
-                        f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
-                        f"in [link={page.url}][cyan]{clean_snippet}[/cyan][/link]"
+                        f"  [bold]{positions_found} position(s) found in {page.company}[/bold]"
                     )
-            if positions_found > 0:
-                console.print(
-                    f"  [bold]{positions_found} position(s) found in {page.company}[/bold]"
-                )
-            elif result.success:
-                console.print(f"  [dim]No matches in {page.company}[/dim]")
-    else:
-        results = []
-        total_pages = len(config.enabled_pages)
+                elif result.success:
+                    console.print(f"  [dim]No matches in {page.company}[/dim]")
+        else:
+            results = []
+            total_pages = len(pages_to_scan)
 
-        for i, page in enumerate(config.enabled_pages, 1):
-            with console.status(
-                f"[bold]Searching in {page.company}...[/bold] ({i}/{total_pages})"
-            ):
-                page_keywords = config.get_keywords_for_page(page)
-                result = scan_page(
-                    page, page_keywords, app_ctx, no_js=no_js, since_days=since
-                )
-                results.append(result)
+            for i, page in enumerate(pages_to_scan, 1):
+                with console.status(
+                    f"[bold]Searching in {page.company}...[/bold] ({i}/{total_pages})"
+                ):
+                    page_keywords = search_config.get_keywords_for_page(page)
+                    result = scan_page(
+                        page,
+                        page_keywords,
+                        app_ctx,
+                        no_js=no_js,
+                        since_days=final_since,
+                    )
+                    results.append(result)
 
-            # Print matches after fetching
-            positions_found = 0
-            for match in result.matches:
-                for snippet in match.context_snippets:
-                    positions_found += 1
-                    clean_snippet = snippet.strip(".")
+                # Print matches after fetching
+                positions_found = 0
+                for match in result.matches:
+                    for snippet in match.context_snippets:
+                        positions_found += 1
+                        clean_snippet = snippet.strip(".")
+                        console.print(
+                            f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
+                            f"in [link={page.url}][cyan]{clean_snippet}[/cyan][/link]"
+                        )
+                if positions_found > 0:
                     console.print(
-                        f"  [green]Found[/green] [yellow]{match.keyword}[/yellow] "
-                        f"in [link={page.url}][cyan]{clean_snippet}[/cyan][/link]"
+                        f"  [bold]{positions_found} position(s) found in {page.company}[/bold]"
                     )
-            if positions_found > 0:
-                console.print(
-                    f"  [bold]{positions_found} position(s) found in {page.company}[/bold]"
-                )
-            elif result.success:
-                console.print(f"  [dim]No matches in {page.company}[/dim]")
+                elif result.success:
+                    console.print(f"  [dim]No matches in {page.company}[/dim]")
 
-    # Display results
-    display_results(results, verbose=verbose)
+        # Display results
+        display_results(results, verbose=verbose)
 
-    # Summary
-    total_matches = sum(r.total_matches for r in results)
-    successful = sum(1 for r in results if r.success)
+        # Summary
+        total_matches = sum(r.total_matches for r in results)
+        successful = sum(1 for r in results if r.success)
 
-    console.print()
-    console.print(
-        f"[bold]Summary:[/bold] {successful}/{len(results)} pages searched, "
-        f"{total_matches} total keyword matches"
-    )
+        console.print()
+        console.print(
+            f"[bold]Summary:[/bold] {successful}/{len(results)} pages searched, "
+            f"{total_matches} total keyword matches"
+        )
+    finally:
+        # Restore original pages (though app context is transient for CLI run)
+        if companies:
+            search_config.pages = original_pages

@@ -63,17 +63,36 @@ clean:
 
 # Generate schema/schema.json from schema/schema.cue
 schema:
-    cue def schema/schema.cue --out jsonschema > schema/schema.json
-    @echo "✅ schema.json regenerated"
+    @echo "🔍 Formatting schema.cue..."
+    @cue fmt schema/schema.cue
+    @echo "🔄 Generating schema.json from CUE..."
+    @cue export --out jsonschema schema/schema.cue > schema/schema.json
+    @echo "🔧 Cleaning up schema.json (removing # prefixes from defs)..."
+    @sed -i '' 's|#/\$defs/#|#/\$defs/|g; s/"#\([A-Z][^"]*\)"/"\1"/g' schema/schema.json
+    @echo "📐 Ordering schema.json keys..."
     @cat schema/schema.json | schema/order-schema.sh > schema/schema.json.tmp \
     && mv schema/schema.json.tmp schema/schema.json
-    @echo "✅ schema.json keys successfully ordered"
+    @echo "✅ schema.json regenerated"
 
-# Format and lint job-search.toml with tombi
+# Generate config models from schema.json
+models: schema
+    @echo "🔄 Generating config models from schema.json..."
+    @datamodel-codegen \
+        --input schema/schema.json \
+        --input-file-type jsonschema \
+        --output job/config/models.py \
+        --output-model-type pydantic_v2.BaseModel \
+        --field-constraints \
+        --use-schema-description \
+        --collapse-root-models \
+        --disable-warnings
+    @echo "✅ models.py generated at job/config/models.py"
+
+# Format and lint job.toml with tombi
 tombi:
-    tombi format job-search.toml
-    tombi lint job-search.toml
-    @echo "✅ job-search.toml formatted and linted"
+    tombi format job.toml
+    tombi lint job.toml
+    @echo "✅ job.toml formatted and linted"
 
 
 alias b := build

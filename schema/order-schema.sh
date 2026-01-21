@@ -13,9 +13,9 @@ SCHEMA_CUE="$SCHEMA_DIR/schema.cue"
 get_field_order() {
     local type_name="$1"
     awk "/${type_name}: \\{/,/^}/" "$SCHEMA_CUE" | \
-        grep -E '^[[:space:]]+[a-zA-Z_]' | \
+        grep -E '^[[:space:]]+[a-zA-Z_"]' | \
         grep -v '//' | \
-        sed -E 's/^[[:space:]]+([a-zA-Z_][a-zA-Z0-9_]*)\??.*/\1/' | \
+        sed -E 's/^[[:space:]]+"?([a-zA-Z_][a-zA-Z0-9_-]*)"?\??.*/\1/' | \
         jq -R -s 'split("\n") | map(select(length > 0))'
 }
 

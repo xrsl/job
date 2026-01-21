@@ -8,7 +8,8 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from job.__version__ import __version__ as job_version
-from job.core import AppContext, Config
+from job.config import settings
+from job.core import AppContext
 from job.search import app as search_app
 from job.add import app as add_app
 from job.commands import app as commands_app
@@ -71,8 +72,9 @@ def main(
     version: Annotated[bool | None, version_option] = None,
 ) -> None:
     """Job CLI - manage job postings."""
-    config = Config.from_env(verbose=verbose)
-    ctx.obj = AppContext(config=config)
+    if verbose:
+        settings.verbose = True
+    ctx.obj = AppContext(config=settings)
 
 
 # Merge all sub-apps at root level for flat command structure

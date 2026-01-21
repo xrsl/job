@@ -233,11 +233,14 @@ def export(
     data = [job.model_dump() for job in jobs]
     content = json.dumps(data, indent=2, ensure_ascii=False)
 
-    if output:
+    # Use default output from config if not provided
+    final_output = output or app_ctx.config.export.output
+
+    if final_output:
         try:
-            with open(output, "w", encoding="utf-8") as f:
+            with open(final_output, "w", encoding="utf-8") as f:
                 f.write(content)
-            typer.echo(f"Exported {len(jobs)} jobs to {output}")
+            typer.echo(f"Exported {len(jobs)} jobs to {final_output}")
         except OSError as e:
             error(f"Failed to write file: {e}")
             raise typer.Exit(1)
@@ -252,7 +255,7 @@ def export(
 def dbinfo(ctx: typer.Context) -> None:
     """Show database location and statistics."""
     app_ctx: AppContext = ctx.obj
-    db_path = app_ctx.config.db_path
+    db_path = app_ctx.config.get_db_path()
 
     with Session(app_ctx.engine) as session:
         count = len(session.exec(select(JobAd)).all())

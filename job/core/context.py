@@ -7,7 +7,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel, create_engine
 from structlog.typing import FilteringBoundLogger
 
-from job.core.config import Config
+from job.config import Settings
 from job.core.logging import configure_logging, get_logger
 
 
@@ -15,14 +15,15 @@ from job.core.logging import configure_logging, get_logger
 class AppContext:
     """Application context holding shared dependencies."""
 
-    config: Config
+    config: Settings
     _logging_configured: bool = field(default=False, init=False)
 
     @cached_property
     def engine(self) -> Engine:
         """Lazy initialization of database engine."""
-        self.logger.debug("initializing_database", path=str(self.config.db_path))
-        engine = create_engine(f"sqlite:///{self.config.db_path}")
+        db_path = self.config.get_db_path()
+        self.logger.debug("initializing_database", path=str(db_path))
+        engine = create_engine(f"sqlite:///{db_path}")
         SQLModel.metadata.create_all(engine)
         return engine
 

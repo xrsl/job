@@ -1,21 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
-    "#CareerPage": {
+    "CareerPage": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "company": {
           "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "keywords": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         },
         "enabled": {
           "type": "boolean"
@@ -25,43 +16,172 @@
           "items": {
             "type": "string"
           }
-        }
-      },
-      "required": [
-        "company",
-        "url"
-      ],
-      "x-tombi-table-keys-order": "schema"
-    },
-    "#JobSearch": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
+        },
         "keywords": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "company",
+        "url"
+      ]
+    },
+    "JobAdd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "browser": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string"
+        },
+        "structured": {
+          "type": "boolean"
+        }
+      }
+    },
+    "JobExport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "type": "string"
+        },
+        "output-format": {
+          "type": "string"
+        }
+      }
+    },
+    "JobFit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cv": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        }
+      }
+    },
+    "JobGH": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto-assign": {
+          "type": "boolean"
+        },
+        "default-labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "repo": {
+          "type": "string"
+        }
+      }
+    },
+    "JobSearch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
         "in": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/#CareerPage"
+            "$ref": "#/$defs/CareerPage"
           }
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parallel": {
+          "type": "boolean"
+        },
+        "since": {
+          "type": "integer"
         }
-      },
+      }
+    },
+    "JobSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "add": {
+          "$ref": "#/$defs/JobAdd"
+        },
+        "db-path": {
+          "type": "string"
+        },
+        "export": {
+          "$ref": "#/$defs/JobExport"
+        },
+        "fit": {
+          "$ref": "#/$defs/JobFit"
+        },
+        "gh": {
+          "$ref": "#/$defs/JobGH"
+        },
+        "model": {
+          "type": "string"
+        },
+        "search": {
+          "$ref": "#/$defs/JobSearch"
+        },
+        "verbose": {
+          "type": "boolean"
+        }
+      }
+    },
+    "#CareerPage": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobSearch": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobGH": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobFit": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobAdd": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobExport": {
+      "properties": {},
+      "x-tombi-table-keys-order": "schema"
+    },
+    "#JobSettings": {
+      "properties": {},
       "x-tombi-table-keys-order": "schema"
     }
   },
   "type": "object",
   "properties": {
     "job": {
-      "type": "object",
-      "properties": {
-        "search": {
-          "$ref": "#/$defs/#JobSearch"
-        }
-      }
+      "$ref": "#/$defs/JobSettings"
     }
   }
 }

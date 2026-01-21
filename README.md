@@ -74,6 +74,7 @@ job fit --id 1 --context ~/cv.toml
 ### Context Files
 
 The `--context` flag accepts **any file format**:
+
 - **Individual files**: `.md`, `.toml`, `.txt`, `.pdf`, `.tex`, `.yaml`, `.json`, etc.
 - **Directories**: Recursively reads all files (UTF-8 text files; skips binaries)
 - **Multiple paths**: Mix files and directories
@@ -161,6 +162,7 @@ Each assessment includes:
 ### Storage
 
 Assessments are stored in the database with:
+
 - Job reference
 - Model used
 - Context files used
@@ -168,6 +170,7 @@ Assessments are stored in the database with:
 - Full assessment details
 
 This allows you to:
+
 - Track how your fit changes as you update your CV
 - Compare assessments from different models
 - Maintain a history of all job evaluations
@@ -190,6 +193,7 @@ job gh issue --id 1 --repo owner/repo --force
 ```
 
 **What gets posted:**
+
 - Issue title: `{job.title} at {job.company}`
 - Issue body: Full job description with metadata (location, deadline, etc.)
 - Job metadata is saved to database (prevents duplicate posting)
@@ -210,6 +214,7 @@ job gh comment -a 5 --issue 12
 ```
 
 **Comment format includes:**
+
 - Job details with clickable link
 - Overall fit score (0-100) with color coding
 - Strengths and gaps as bullet lists
@@ -247,13 +252,44 @@ job gh c -a 5                 # comment
 
 ## Configuration
 
-Create `job-search.toml` with schema validation ([tombi VSCode Extension](https://tombi-toml.github.io/tombi/docs/editors/vscode-extension) recommended):
+Create `job.toml` to set defaults for all commands ([tombi VSCode Extension](https://tombi-toml.github.io/tombi/docs/editors/vscode-extension) recommended for schema validation):
 
 ```toml
-#:schema https://raw.githubusercontent.com/xrsl/job/v0.5.0/schema/schema.json
+#:schema https://raw.githubusercontent.com/xrsl/job/main/schema/schema.json
 
+# Global settings
+[job]
+model = "gemini-2.5-flash"  # Default AI model
+# verbose = true
+# db-path = "~/.local/share/job/jobs.db"
+
+# GitHub integration defaults
+[job.gh]
+repo = "xrsl/cv"  # Default repository for gh commands
+# default-labels = ["job-application"]
+# auto-assign = true
+
+# Fit assessment defaults
+[job.fit]
+cv = "~/Documents/cv.md"  # Default CV path
+# model = "gemini-2.0-flash-exp"  # Override model for fit
+# context = ["~/Documents/cover-letter.md"]  # Additional context
+
+# Add command defaults
+[job.add]
+# structured = true  # Always use AI extraction
+# browser = false    # Use browser by default
+# model = "gemini-2.5-flash"
+
+# Export defaults
+[job.export]
+# output-format = "json"
+
+# Job search configuration
 [job.search]
 keywords = ["python", "backend", "senior"]
+# parallel = true  # Enable parallel search
+# since = 7        # Default --since days
 
 [[job.search.in]]
 company = "Spotify"
@@ -270,14 +306,58 @@ url = "https://stripe.com/jobs/search"
 extra-keywords = ["fintech", "payments"]  # Merge with defaults
 ```
 
+### Configuration Precedence
+
+Settings are applied in this order (highest to lowest priority):
+
+1. **CLI flags** – `--repo`, `--model`, `--context`, etc.
+2. **Environment variables** – `JOB_MODEL`, `JOB_DB_PATH`
+3. **job.toml** – Config file defaults
+4. **Hardcoded defaults** – Built-in fallbacks
+
+### Config File Locations
+
+The CLI searches for `job.toml` in these locations (first found wins):
+
+1. `JOB_CONFIG` environment variable
+2. `./job.toml` (current directory)
+3. `~/.config/job/job.toml` (XDG config)
+4. `~/.job.toml` (home directory)
+
+### Examples
+
+**Use repo from config:**
+
+```bash
+# job.toml: [job.gh] repo = "xrsl/cv"
+job gh issue --id 2  # Uses xrsl/cv from config
+job gh issue --id 2 --repo other/repo  # Override with CLI flag
+```
+
+**Use fit defaults:**
+
+```bash
+# job.toml: [job.fit] cv = "~/cv.md", context = ["~/cover.md"]
+job fit --id 1  # Uses cv and context from config
+job fit --id 1 --context extra.md  # Merges with config
+```
+
+**Use add defaults:**
+
+```bash
+# job.toml: [job.add] structured = true, browser = true
+job add https://example.com/job  # Uses structured + browser from config
+job add https://example.com/job --no-structured  # Override
+```
+
 ## Environment
 
-| Variable            | Purpose                  | Default                      |
-| ------------------- | ------------------------ | ---------------------------- |
-| `GEMINI_API_KEY`    | AI extraction (required) | –                            |
-| `JOB_MODEL`         | Model override           | `gemini-2.5-flash`           |
-| `JOB_DB_PATH`       | Database location        | `~/.local/share/job/jobs.db` |
-| `JOB_SEARCH_CONFIG` | Config file path         | `./job-search.toml`          |
+| Variable         | Purpose                  | Default                      |
+| ---------------- | ------------------------ | ---------------------------- |
+| `GEMINI_API_KEY` | AI extraction (required) | –                            |
+| `JOB_MODEL`      | Model override           | `gemini-2.5-flash`           |
+| `JOB_DB_PATH`    | Database location        | `~/.local/share/job/jobs.db` |
+| `JOB_CONFIG`     | Config file path         | `./job.toml`                 |
 
 ## Commands
 

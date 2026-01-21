@@ -21,7 +21,7 @@ def path(ctx: typer.Context) -> None:
         job db path
     """
     app_ctx: AppContext = ctx.obj
-    db_path = app_ctx.config.db_path
+    db_path = app_ctx.config.get_db_path()
 
     console.print(f"{db_path}")
 
@@ -70,7 +70,7 @@ def delete(
         job db del --force
     """
     app_ctx: AppContext = ctx.obj
-    db_path = app_ctx.config.db_path
+    db_path = app_ctx.config.get_db_path()
 
     if not db_path.exists():
         error(f"Database not found at: {db_path}")

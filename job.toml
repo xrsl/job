@@ -1,0 +1,81 @@
+#:schema https://raw.githubusercontent.com/xrsl/job/main/schema/schema.json
+
+# Job CLI Configuration
+# ======================
+# Unified configuration for the job CLI tool.
+# All settings are optional and can be overridden via CLI flags.
+
+# Global settings
+[job]
+# model = "gemini-2.5-flash"  # Default AI model for all commands
+# verbose = false              # Enable verbose logging
+# db-path = "~/.local/share/job/jobs.db"  # Custom database location
+
+# GitHub integration defaults
+[job.gh]
+# repo = "xrsl/cv"                        # Default repository for gh commands
+# default-labels = ["job-application"]    # Auto-apply these labels to issues
+# auto-assign = true                      # Auto-assign issues to yourself
+
+# Fit assessment defaults
+[job.fit]
+# cv = "~/Documents/cv.md"                # Default CV path
+# model = "gemini-2.0-flash-exp"          # Override model for fit assessments
+# context = ["~/Documents/cover-letter.md"]  # Additional context files
+
+# Add command defaults
+[job.add]
+# structured = true  # Always use AI extraction by default
+# browser = false    # Use browser fetching by default
+# model = "gemini-2.5-flash"  # Override model for add command
+
+# Export command defaults
+[job.export]
+# output-format = "json"  # Default export format
+
+# Job search configuration
+[job.search]
+keywords = [
+  "python",
+  "backend",
+  "developer",
+  "devops",
+]
+# parallel = true  # Enable parallel search by default
+# since = 7        # Default --since value (days)
+
+# Each [[job.search.in]] entry defines a career page to scan.
+# Required fields:
+#   - company: Human-readable name for the company
+#   - url: URL to the careers/jobs page
+# Optional fields:
+#   - keywords: Custom keywords for this page (overrides defaults)
+#   - extra-keywords: Additional keywords (merged with defaults)
+#   - enabled: Set to false to skip this page (default: true)
+
+[[job.search.in]]
+company = "Spotify"
+url = "https://www.lifeatspotify.com/jobs"
+
+[[job.search.in]]
+company = "Stripe"
+url = "https://stripe.com/jobs/search"
+
+[[job.search.in]]
+company = "Linear"
+url = "https://linear.app/careers"
+
+[[job.search.in]]
+company = "Anthropic"
+url = "https://www.anthropic.com/careers"
+
+[[job.search.in]]
+company = "Vercel"
+url = "https://vercel.com/careers"
+
+# Example of page-specific keywords:
+# [[job.search.in]]
+# company = "Example Corp"
+# url = "https://example.com/careers"
+# keywords = ["frontend", "react", "typescript"]
+# enabled = false
