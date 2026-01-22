@@ -1,5 +1,8 @@
 # application cmd (alias app)
 
+
+job app w 1 -s schema.json should enforce ai to conform to user-provided schema which can have defs of cv and letter.
+
 output = "out/letter.pdf"
 output = "out/cv.pdf"
 job app tag 42 # Tag application as final, might also named submit
