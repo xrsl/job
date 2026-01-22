@@ -223,8 +223,9 @@ def query_jobs(
 @app.command(name="export")
 def export(
     ctx: typer.Context,
-    job_ids: list[int] = typer.Option(None, "--id", "-i", help="Job ID(s) to export"),
-    urls: list[str] = typer.Option(None, "--url", "-u", help="Job URL(s) to export"),
+    identifier: str = typer.Argument(
+        None, help="Job ID or URL to export (exports all if omitted)"
+    ),
     output: str = typer.Option(
         None, "--output", "-o", help="Output file (default: stdout)"
     ),
@@ -232,49 +233,27 @@ def export(
 ) -> None:
     """Export jobs to JSON format. (Alias: e)
 
-    Export specific jobs by ID or URL (repeatable flags), or all jobs matching a query.
+    Export a specific job by ID or URL, or all jobs (optionally filtered by query).
     Examples:
-        job e --id 1 --id 2
-        job export --url https://example.com --id 5
-        job e -q "python"
+        job e 1           # Export job with ID 1
+        job e             # Export all jobs
+        job e -q "python" # Export jobs matching query
     """
     app_ctx: AppContext = ctx.obj
 
     with Session(app_ctx.engine) as session:
         jobs = []
 
-        # 1. Fetch by explicit IDs/URLs if provided
-        if job_ids or urls:
-            # IDs
-            if job_ids:
-                for jid in job_ids:
-                    job = session.get(JobAd, jid)
-                    if job:
-                        jobs.append(job)
-                    else:
-                        error(f"No job found with ID: {jid}")
-
-            # URLs
-            if urls:
-                for url in urls:
-                    url_clean = validate_url(url)
-                    job = session.exec(
-                        select(JobAd).where(JobAd.job_posting_url == url_clean)
-                    ).first()
-                    if job:
-                        # Avoid duplicates if ID and URL point to same job
-                        if job not in jobs:
-                            jobs.append(job)
-                    else:
-                        error(f"No job found with URL: {url}")
-
-            if not jobs:
-                # If arguments were provided but nothing found, we should probably exit
-                # But errors are already printed.
+        # If identifier provided, fetch that specific job
+        if identifier:
+            job = get_job_by_id_or_url(session, identifier)
+            if job:
+                jobs.append(job)
+            else:
+                error(f"No job found with ID or URL: {identifier}")
                 raise typer.Exit(1)
-
-        # 2. If no explicit IDs/URLs, use query or all
         else:
+            # No identifier: fetch all (optionally filtered by query)
             stmt = select(JobAd).order_by(desc(JobAd.id))
 
             if query:
@@ -298,14 +277,11 @@ def export(
     data = [job.model_dump() for job in jobs]
     content = json.dumps(data, indent=2, ensure_ascii=False)
 
-    # Use default output from config if not provided
-    final_output = output or app_ctx.config.export.output
-
-    if final_output:
+    if output:
         try:
-            with open(final_output, "w", encoding="utf-8") as f:
+            with open(output, "w", encoding="utf-8") as f:
                 f.write(content)
-            typer.echo(f"Exported {len(jobs)} jobs to {final_output}")
+            typer.echo(f"Exported {len(jobs)} jobs to {output}")
         except OSError as e:
             error(f"Failed to write file: {e}")
             raise typer.Exit(1)

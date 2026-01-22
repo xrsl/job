@@ -13,7 +13,7 @@
 
 # GitHub integration defaults
 [job.gh]
-# repo = "xrsl/cv"                        # Default repository for gh commands
+# repo = "repo/owner"                        # Default repository for gh commands
 # default-labels = ["job-application"]    # Auto-apply these labels to issues
 # auto-assign = true                      # Auto-assign issues to yourself
 

@@ -61,32 +61,11 @@ clean:
     find . -type d -name "__pycache__" -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
 
-# Generate schema/schema.json from schema/schema.cue
+# Generate schema/schema.json from Pydantic models
 schema:
-    @echo "🔍 Formatting schema.cue..."
-    @cue fmt schema/schema.cue
-    @echo "🔄 Generating schema.json from CUE..."
-    @cue export --out jsonschema schema/schema.cue > schema/schema.json
-    @echo "🔧 Cleaning up schema.json (removing # prefixes from defs)..."
-    @sed -i '' 's|#/\$defs/#|#/\$defs/|g; s/"#\([A-Z][^"]*\)"/"\1"/g' schema/schema.json
-    @echo "📐 Ordering schema.json keys..."
-    @cat schema/schema.json | schema/order-schema.sh > schema/schema.json.tmp \
-    && mv schema/schema.json.tmp schema/schema.json
+    @echo "🔄 Generating schema.json from Pydantic..."
+    @uv run python -c "from job.config import write_schema; write_schema()"
     @echo "✅ schema.json regenerated"
-
-# Generate config models from schema.json
-models: schema
-    @echo "🔄 Generating config models from schema.json..."
-    @datamodel-codegen \
-        --input schema/schema.json \
-        --input-file-type jsonschema \
-        --output job/config/models.py \
-        --output-model-type pydantic_v2.BaseModel \
-        --field-constraints \
-        --use-schema-description \
-        --collapse-root-models \
-        --disable-warnings
-    @echo "✅ models.py generated at job/config/models.py"
 
 # Format and lint job.toml with tombi
 tombi:

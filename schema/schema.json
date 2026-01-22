@@ -1,215 +1,296 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
     "CareerPage": {
-      "type": "object",
       "additionalProperties": false,
+      "description": "Career page configuration for job search.",
       "properties": {
         "company": {
+          "title": "Company",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
           "type": "string"
         },
         "enabled": {
+          "default": true,
+          "title": "Enabled",
           "type": "boolean"
         },
-        "extra-keywords": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "keywords": {
-          "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "title": "Keywords",
+          "type": "array"
         },
-        "url": {
-          "type": "string"
+        "extra-keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra-Keywords",
+          "type": "array"
         }
       },
       "required": [
         "company",
         "url"
-      ]
+      ],
+      "title": "CareerPage",
+      "type": "object"
     },
     "JobAdd": {
-      "type": "object",
       "additionalProperties": false,
+      "description": "Add command configuration.",
       "properties": {
         "browser": {
+          "default": false,
+          "title": "Browser",
           "type": "boolean"
-        },
-        "model": {
-          "type": "string"
         },
         "structured": {
+          "default": false,
+          "title": "Structured",
           "type": "boolean"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
         }
-      }
+      },
+      "title": "JobAdd",
+      "type": "object"
     },
     "JobApp": {
-      "type": "object",
       "additionalProperties": false,
+      "description": "App command configuration.",
       "properties": {
-        "cv": {
-          "type": "string"
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
         },
-        "extra": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "cv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cv"
         },
         "letter": {
-          "type": "string"
-        },
-        "model": {
-          "type": "string"
-        }
-      }
-    },
-    "JobExport": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "output": {
-          "type": "string"
-        },
-        "output-format": {
-          "type": "string"
-        }
-      }
-    },
-    "JobFit": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "cv": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Letter"
         },
         "extra": {
-          "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "title": "Extra",
+          "type": "array"
+        }
+      },
+      "title": "JobApp",
+      "type": "object"
+    },
+    "JobFit": {
+      "additionalProperties": false,
+      "description": "Fit assessment configuration.",
+      "properties": {
+        "cv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cv"
         },
         "model": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "extra": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra",
+          "type": "array"
         }
-      }
+      },
+      "title": "JobFit",
+      "type": "object"
     },
     "JobGH": {
-      "type": "object",
       "additionalProperties": false,
+      "description": "GitHub integration configuration.",
       "properties": {
+        "repo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repo"
+        },
         "auto-assign": {
+          "default": false,
+          "title": "Auto-Assign",
           "type": "boolean"
         },
         "default-labels": {
-          "type": "array",
           "items": {
             "type": "string"
-          }
-        },
-        "repo": {
-          "type": "string"
+          },
+          "title": "Default-Labels",
+          "type": "array"
         }
-      }
+      },
+      "title": "JobGH",
+      "type": "object"
     },
     "JobSearch": {
-      "type": "object",
       "additionalProperties": false,
+      "description": "Job search configuration.",
       "properties": {
-        "in": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CareerPage"
-          }
-        },
         "keywords": {
-          "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "title": "Keywords",
+          "type": "array"
         },
         "parallel": {
+          "default": false,
+          "title": "Parallel",
           "type": "boolean"
         },
         "since": {
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
+        },
+        "in": {
+          "items": {
+            "$ref": "#/$defs/CareerPage"
+          },
+          "title": "In",
+          "type": "array"
         }
-      }
+      },
+      "title": "JobSearch",
+      "type": "object"
     },
-    "JobSettings": {
-      "type": "object",
-      "additionalProperties": false,
+    "Settings": {
+      "description": "Application settings loaded from job.toml and environment variables.\n\nPrecedence order:\n1. Environment variables (with JOB_ prefix)\n2. job.toml file (see _find_config_file for search order)\n3. Default values from schema\n\nExample environment variables:\n    JOB_VERBOSE=true\n    JOB_MODEL=gemini-2.5-flash\n    JOB_DB_PATH=~/my-jobs.db\n    JOB_FIT__CV=~/cv.md",
       "properties": {
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "verbose": {
+          "default": false,
+          "title": "Verbose",
+          "type": "boolean"
+        },
+        "db-path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Db-Path"
+        },
+        "gh": {
+          "$ref": "#/$defs/JobGH"
+        },
+        "fit": {
+          "$ref": "#/$defs/JobFit"
+        },
         "add": {
           "$ref": "#/$defs/JobAdd"
         },
         "app": {
           "$ref": "#/$defs/JobApp"
         },
-        "db-path": {
-          "type": "string"
-        },
-        "export": {
-          "$ref": "#/$defs/JobExport"
-        },
-        "fit": {
-          "$ref": "#/$defs/JobFit"
-        },
-        "gh": {
-          "$ref": "#/$defs/JobGH"
-        },
-        "model": {
-          "type": "string"
-        },
         "search": {
           "$ref": "#/$defs/JobSearch"
-        },
-        "verbose": {
-          "type": "boolean"
         }
-      }
-    },
-    "#CareerPage": {
-      "properties": {},
-      "x-tombi-table-keys-order": "schema"
-    },
-    "#JobSearch": {
-      "properties": {},
-      "x-tombi-table-keys-order": "schema"
-    },
-    "#JobGH": {
-      "properties": {},
-      "x-tombi-table-keys-order": "schema"
-    },
-    "#JobFit": {
-      "properties": {},
-      "x-tombi-table-keys-order": "schema"
-    },
-    "#JobAdd": {
-      "properties": {},
-      "x-tombi-table-keys-order": "schema"
-    },
-    "#JobExport": {
-      "properties": {},
-      "x-tombi-table-keys-order": "schema"
-    },
-    "#JobApp": {
-      "properties": {},
-      "x-tombi-table-keys-order": "schema"
-    },
-    "#JobSettings": {
-      "properties": {},
-      "x-tombi-table-keys-order": "schema"
+      },
+      "title": "Settings",
+      "type": "object"
     }
   },
-  "type": "object",
+  "description": "Root model for job.toml schema generation.",
   "properties": {
     "job": {
-      "$ref": "#/$defs/JobSettings"
+      "$ref": "#/$defs/Settings"
     }
-  }
+  },
+  "required": [
+    "job"
+  ],
+  "title": "_JobToml",
+  "type": "object"
 }

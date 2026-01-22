@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.table import Table
 
 from job.core import AppContext
-from job.config import CareerPage, SearchSettings
+from job.config import CareerPage, JobSearch
 from job.fetchers import AsyncBrowserFetcher, BrowserFetcher, StaticFetcher
 from job.utils import error
 
@@ -393,7 +393,7 @@ async def scan_page_async(
 
 
 async def scan_all_pages_async(
-    search_settings: SearchSettings,
+    search_settings: JobSearch,
     ctx: AppContext,
     no_js: bool = False,
     since_days: int | None = None,

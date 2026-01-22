@@ -93,13 +93,13 @@ def test_del_by_id(prepopulated_db):
 
 
 def test_export_by_id(prepopulated_db):
-    result = runner.invoke(app, ["export", "--id", "2"])
+    result = runner.invoke(app, ["export", "2"])
     assert result.exit_code == 0
     assert "Job Two" in result.output
     assert "Job One" not in result.output
 
 
 def test_export_invalid_id(prepopulated_db):
-    result = runner.invoke(app, ["export", "--id", "999"])
+    result = runner.invoke(app, ["export", "999"])
     assert result.exit_code == 1
-    assert "No job found with ID: 999" in result.output
+    assert "No job found" in result.output

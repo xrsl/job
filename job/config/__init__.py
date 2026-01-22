@@ -5,28 +5,22 @@ This module provides configuration loading from:
 2. job.toml file (multiple locations)
 3. Default values
 
-Models are auto-generated from schema/schema.cue via `just models`.
-Extended models with helpers are in extensions.py.
+All models are defined in settings.py which is the single source of truth.
+JSON Schema is exported via generate_schema().
 """
 
-from .config import Settings, settings
-from .extensions import (
+from .settings import (
     CareerPage,
     JobAdd,
     JobApp,
-    JobExport,
     JobFit,
     JobGH,
     JobSearch,
-    JobSettings,
+    Settings,
+    generate_schema,
+    settings,
+    write_schema,
 )
-
-# Backwards compatibility aliases
-SearchSettings = JobSearch
-GitHubSettings = JobGH
-FitSettings = JobFit
-AddSettings = JobAdd
-ExportSettings = JobExport
 
 __all__ = [
     "settings",
@@ -34,15 +28,9 @@ __all__ = [
     "CareerPage",
     "JobAdd",
     "JobApp",
-    "JobExport",
     "JobFit",
     "JobGH",
     "JobSearch",
-    "JobSettings",
-    # Aliases
-    "SearchSettings",
-    "GitHubSettings",
-    "FitSettings",
-    "AddSettings",
-    "ExportSettings",
+    "generate_schema",
+    "write_schema",
 ]

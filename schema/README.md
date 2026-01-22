@@ -21,10 +21,9 @@ tombi format job.toml
 
 ## Schema Development
 
-The schema is defined in CUE and compiled to JSON Schema:
+The schema is generated from Pydantic models in `job/config/settings.py`:
 
 ```bash
-# Generate schema.json from schema.cue
 just schema
 ```
 
