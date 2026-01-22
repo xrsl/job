@@ -58,6 +58,46 @@ def create_app_agent(model: str) -> Agent[None, JobAppDraftBase]:
     )
 
 
+def read_context_files(context_paths: list[str]) -> str:
+    """Read multiple context files and combine their contents.
+
+    Args:
+        context_paths: List of file paths to read
+
+    Returns:
+        Combined content of all files
+
+    Raises:
+        typer.Exit: If any path cannot be read
+    """
+    combined_content = []
+
+    for path_str in context_paths:
+        path = Path(path_str).expanduser()
+
+        if not path.exists():
+            error(f"File not found: {path}")
+            raise typer.Exit(1)
+
+        if not path.is_file():
+            error(f"Path is not a file: {path}")
+            raise typer.Exit(1)
+
+        try:
+            content = path.read_text(encoding="utf-8")
+            combined_content.append(f"=== {path.name} ===\n{content}\n")
+        except UnicodeDecodeError:
+            console.print(
+                f"[dim]Skipped binary file: {path.name}[/dim]", style="yellow"
+            )
+            continue
+        except Exception as e:
+            error(f"Failed to read {path}: {e}")
+            raise typer.Exit(1)
+
+    return "\n".join(combined_content)
+
+
 def read_source_file(path: str) -> dict:
     """Read a TOML/YAML source file and extract the content.
 
@@ -94,72 +134,225 @@ def read_source_file(path: str) -> dict:
         raise typer.Exit(1)
 
 
-@app.command(name="ls")
+def _write_source_file(path: str, data: dict, field_name: str) -> None:
+    """Write structured data back to TOML/YAML file.
+
+    Args:
+        path: Destination file path
+        data: Dictionary data to write
+        field_name: Root field name (e.g., 'cv', 'letter')
+
+    Similar to cvx build's writeData function.
+    """
+    import shutil
+    import subprocess
+
+    import yaml
+
+    file_path = Path(path).expanduser()
+
+    # Wrap data in field name
+    wrapper = {field_name: data}
+
+    # Detect format and marshal
+    if path.endswith(".toml"):
+        # Python's tomllib doesn't support writing, use tomli_w
+        try:
+            import tomli_w
+
+            content = tomli_w.dumps(wrapper)
+        except ImportError:
+            error("tomli_w package required for writing TOML files")
+            raise typer.Exit(1)
+    else:
+        content = yaml.dump(wrapper, default_flow_style=False, sort_keys=False)
+
+    # Write to file
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content, encoding="utf-8")
+
+    # Auto-format TOML with tombi if available
+    if path.endswith(".toml") and shutil.which("tombi"):
+        subprocess.run(["tombi", "format", str(file_path)], check=False)
+
+
+def _apply_draft_to_files(
+    draft: JobAppDraft, cv_dest: str | None = None, letter_dest: str | None = None
+) -> None:
+    """Apply draft content to source files.
+
+    Args:
+        draft: The draft to apply
+        cv_dest: Optional CV destination path (uses draft.source_cv_path if not provided)
+        letter_dest: Optional letter destination path (uses draft.source_letter_path if not provided)
+
+    Raises:
+        typer.Exit: If application fails
+    """
+    import json
+
+    # Determine destination paths
+    final_cv_dest = cv_dest or draft.source_cv_path
+    final_letter_dest = letter_dest or draft.source_letter_path
+
+    # Write CV if present
+    if draft.cv_content:
+        if not final_cv_dest:
+            error("No CV destination path specified and none in draft")
+            raise typer.Exit(1)
+
+        try:
+            cv_data = json.loads(draft.cv_content)
+            # If data is already wrapped in {"cv": ...}, extract it
+            if "cv" in cv_data and len(cv_data) == 1:
+                cv_data = cv_data["cv"]
+            _write_source_file(final_cv_dest, cv_data, "cv")
+            console.print(f"[green]✓[/green] CV applied to {final_cv_dest}")
+        except json.JSONDecodeError as e:
+            error(f"Failed to parse CV JSON: {e}")
+            console.print("[dim]The stored CV content appears to be malformed.[/dim]")
+            raise typer.Exit(1)
+        except Exception as e:
+            error(f"Failed to write CV: {e}")
+            raise typer.Exit(1)
+
+    # Write letter if present
+    if draft.letter_content:
+        if not final_letter_dest:
+            error("No letter destination path specified and none in draft")
+            raise typer.Exit(1)
+
+        try:
+            letter_data = json.loads(draft.letter_content)
+            # If data is already wrapped in {"letter": ...}, extract it
+            if "letter" in letter_data and len(letter_data) == 1:
+                letter_data = letter_data["letter"]
+            _write_source_file(final_letter_dest, letter_data, "letter")
+            console.print(f"[green]✓[/green] Letter applied to {final_letter_dest}")
+        except json.JSONDecodeError as e:
+            error(f"Failed to parse letter JSON: {e}")
+            console.print(
+                "[dim]The stored letter content appears to be malformed.[/dim]"
+            )
+            raise typer.Exit(1)
+        except Exception as e:
+            error(f"Failed to write letter: {e}")
+            raise typer.Exit(1)
+
+    if not draft.cv_content and not draft.letter_content:
+        console.print("[yellow]No content to apply[/yellow]")
+
+
+@app.command(name="l", hidden=True)
+@app.command(name="ls", hidden=True)
+@app.command(name="list")
 def list_drafts(
     ctx: typer.Context,
-    job_id: int = typer.Argument(..., help="Job ID to list drafts for"),
+    job_id: int = typer.Argument(None, help="Job ID to list drafts for (optional)"),
 ) -> None:
     """
-    List all application drafts for a job.
+    List application drafts. (Alias: l)
 
-    Shows all AI-generated application documents stored for this job.
+    List all drafts globally or for a specific job if job_id is provided.
 
     Examples:
-        job app ls 42
+        job app list             (list all drafts)
+        job app l                (using alias)
+        job app list 42          (list drafts for job 42)
     """
     app_ctx: AppContext = ctx.obj
 
     with Session(app_ctx.engine) as session:
-        # Verify job exists
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
+        # Build query based on job_id
+        if job_id is not None:
+            # Verify job exists
+            job = session.get(JobAd, job_id)
+            if not job:
+                error(f"No job found with ID: {job_id}")
+                raise typer.Exit(1)
 
-        # Get all drafts for this job
-        drafts = session.exec(
-            select(JobAppDraft)
-            .where(JobAppDraft.job_id == job_id)
-            .order_by(desc(JobAppDraft.created_at))
-        ).all()
+            # Get all drafts for this job
+            drafts = session.exec(
+                select(JobAppDraft)
+                .where(JobAppDraft.job_id == job_id)
+                .order_by(desc(JobAppDraft.created_at))
+            ).all()
 
-        if not drafts:
+            if not drafts:
+                console.print(
+                    f"[yellow]No application drafts found for job {job_id}[/yellow]"
+                )
+                console.print(
+                    f"[dim]Run 'job app write {job_id}' to generate one[/dim]"
+                )
+                return
+
+            # Display header
+            console.print()
             console.print(
-                f"[yellow]No application drafts found for job {job_id}[/yellow]"
+                Panel(
+                    f"[bold]{job.title}[/bold]\n[dim]{job.company} • {job.location}[/dim]",
+                    title="Job Posting",
+                    border_style="blue",
+                )
             )
-            console.print(f"[dim]Run 'job app write {job_id}' to generate one[/dim]")
-            return
+        else:
+            # Get all drafts across all jobs
+            drafts = session.exec(
+                select(JobAppDraft).order_by(desc(JobAppDraft.created_at))
+            ).all()
 
-        # Display header
-        console.print()
-        console.print(
-            Panel(
-                f"[bold]{job.title}[/bold]\n[dim]{job.company} • {job.location}[/dim]",
-                title="Job Posting",
-                border_style="blue",
-            )
-        )
-        console.print()
+            if not drafts:
+                console.print("[yellow]No application drafts found[/yellow]")
+                console.print(
+                    "[dim]Run 'job app write <job_id>' to generate drafts[/dim]"
+                )
+                return
 
         # Display table of drafts
+        console.print()
         table = Table(show_header=True, header_style="bold cyan")
-        table.add_column("ID", style="dim", width=6)
+
+        if job_id is None:
+            table.add_column("Job ID", style="dim", width=8)
+
+        table.add_column("Draft ID", style="dim", width=10)
         table.add_column("Date", width=20)
         table.add_column("Model", width=25)
         table.add_column("Has CV", width=8)
         table.add_column("Has Letter", width=10)
 
+        if job_id is None:
+            table.add_column("Job Title", width=30)
+
         for draft in drafts:
             has_cv = "[green]✓[/green]" if draft.cv_content else "[dim]−[/dim]"
             has_letter = "[green]✓[/green]" if draft.letter_content else "[dim]−[/dim]"
 
-            table.add_row(
-                str(draft.id),
-                draft.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                draft.model_name,
-                has_cv,
-                has_letter,
-            )
+            if job_id is None:
+                # Get job info for this draft
+                job_for_draft = session.get(JobAd, draft.job_id)
+                job_title = job_for_draft.title if job_for_draft else "Unknown"
+                if len(job_title) > 27:
+                    job_title = job_title[:24] + "..."
+
+                table.add_row(
+                    str(draft.job_id),
+                    str(draft.id),
+                    draft.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    draft.model_name,
+                    has_cv,
+                    has_letter,
+                    job_title,
+                )
+            else:
+                table.add_row(
+                    str(draft.id),
+                    draft.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    draft.model_name,
+                    has_cv,
+                    has_letter,
+                )
 
         console.print(table)
         console.print()
@@ -174,24 +367,32 @@ def write(
     no_letter: bool = typer.Option(
         False, "--no-letter", help="Skip cover letter generation"
     ),
+    no_apply: bool = typer.Option(
+        False, "--no-apply", help="Don't apply changes to source files"
+    ),
     model: str = typer.Option(None, "--model", "-m", help="AI model to use"),
-    cv_source: str = typer.Option(None, "--cv-source", help="CV source file path"),
-    letter_source: str = typer.Option(
+    cv: str = typer.Option(None, "--cv", help="CV source file path"),
+    letter: str = typer.Option(None, "--letter", help="Letter source file path"),
+    extra: list[str] = typer.Option(
         None,
-        "--letter-source",
-        help="Letter source file path",
+        "--extra",
+        "-e",
+        help="Extra context file paths (from config if not specified)",
     ),
 ) -> None:
     """
     Generate tailored application documents with AI. (Alias: w)
 
     Creates AI-generated CV and/or cover letter tailored to the job posting.
+    By default, applies changes to source files. Use --no-apply to only store in database.
     Requires job_id as positional argument.
 
     Examples:
         job app write 42
         job app w 42 --no-letter
-        job app write 42 -m gpt-4o --cv-source src/cv.toml
+        job app write 42 -m gpt-4o --cv cv.toml --letter letter.toml
+        job app w 42 --extra persona.md --extra experience.md
+        job app w 42 --no-apply   (store in DB but don't modify files)
     """
     app_ctx: AppContext = ctx.obj
 
@@ -215,34 +416,48 @@ def write(
         )
 
         # Determine source paths
-        final_cv_source = cv_source or getattr(app_ctx.config.app, "cv", None)
-        final_letter_source = letter_source or getattr(
-            app_ctx.config.app, "letter", None
-        )
+        final_cv = cv or getattr(app_ctx.config.app, "cv", None)
+        final_letter = letter or getattr(app_ctx.config.app, "letter", None)
+
+        # Collect extra context files (CLI + config)
+        final_extra = []
+        if extra:
+            final_extra.extend(extra)
+        if hasattr(app_ctx.config.app, "extra") and app_ctx.config.app.extra:
+            final_extra.extend(app_ctx.config.app.extra)
 
         # Read source files
         cv_data = None
         letter_data = None
+        extra_context = None
 
         if gen_cv:
-            if not final_cv_source:
-                error("Must provide --cv-source or set job.app.cv in job.toml")
+            if not final_cv:
+                error("Must provide --cv or set job.app.cv in job.toml")
                 raise typer.Exit(1)
 
             with console.status("[bold dim]Reading CV source file...[/bold dim]"):
-                cv_data = read_source_file(final_cv_source)
-                console.print(f"[dim]Loaded CV from {final_cv_source}[/dim]")
+                cv_data = read_source_file(final_cv)
+                console.print(f"[dim]Loaded CV from {final_cv}[/dim]")
 
         if gen_letter:
-            if not final_letter_source:
-                error("Must provide --letter-source or set job.app.letter in job.toml")
+            if not final_letter:
+                error("Must provide --letter or set job.app.letter in job.toml")
                 raise typer.Exit(1)
 
             with console.status(
                 "[bold dim]Reading cover letter source file...[/bold dim]"
             ):
-                letter_data = read_source_file(final_letter_source)
-                console.print(f"[dim]Loaded letter from {final_letter_source}[/dim]")
+                letter_data = read_source_file(final_letter)
+                console.print(f"[dim]Loaded letter from {final_letter}[/dim]")
+
+        # Read extra context files if provided
+        if final_extra:
+            with console.status("[bold dim]Reading extra context files...[/bold dim]"):
+                extra_context = read_context_files(final_extra)
+                console.print(
+                    f"[dim]Loaded {len(final_extra)} extra context file(s)[/dim]"
+                )
 
         # Create agent
         agent = create_app_agent(final_model)
@@ -284,6 +499,15 @@ def write(
                 ]
             )
 
+        if extra_context:
+            prompt_parts.extend(
+                [
+                    "ADDITIONAL CONTEXT:",
+                    extra_context,
+                    "",
+                ]
+            )
+
         prompt_parts.append(
             "Generate tailored application documents for this job posting."
         )
@@ -315,8 +539,8 @@ def write(
             model_name=final_model,
             cv_content=draft_data.cv_content if gen_cv else None,
             letter_content=draft_data.letter_content if gen_letter else None,
-            source_cv_path=final_cv_source if gen_cv else None,
-            source_letter_path=final_letter_source if gen_letter else None,
+            source_cv_path=final_cv if gen_cv else None,
+            source_letter_path=final_letter if gen_letter else None,
             notes=draft_data.notes,
         )
 
@@ -338,6 +562,13 @@ def write(
         if draft.notes:
             console.print(f"  [dim]• Notes: {draft.notes[:100]}...[/dim]")
         console.print()
+
+        # Apply changes to source files unless --no-apply is set
+        if not no_apply:
+            console.print()
+            _apply_draft_to_files(draft)
+            console.print()
+
         console.print(f"[dim]View with: job app view {job_id} -i {draft.id}[/dim]")
 
 
@@ -440,14 +671,13 @@ def apply(
     Apply AI-generated content back to source files. (Alias: a)
 
     Writes the CV/letter content from a draft back to the source TOML/YAML files.
-    Similar to cvx build's write-back functionality.
+    Note: By default, 'job app write' now applies changes automatically.
+    Use this command to re-apply a draft or apply to different destination files.
 
     Examples:
         job app apply 42 -i 1
         job app a 42 -i 1 --cv-dest src/tailored-cv.toml
     """
-    import json
-
     app_ctx: AppContext = ctx.obj
 
     with Session(app_ctx.engine) as session:
@@ -457,110 +687,13 @@ def apply(
             error(f"No draft found with ID {draft_id} for job {job_id}")
             raise typer.Exit(1)
 
-        # Determine destination paths
-        final_cv_dest = cv_dest or draft.source_cv_path
-        final_letter_dest = letter_dest or draft.source_letter_path
-
-        # Write CV if present
-        if draft.cv_content:
-            if not final_cv_dest:
-                error("No CV destination path specified and none in draft")
-                raise typer.Exit(1)
-
-            try:
-                cv_data = json.loads(draft.cv_content)
-                # If data is already wrapped in {"cv": ...}, extract it
-                if "cv" in cv_data and len(cv_data) == 1:
-                    cv_data = cv_data["cv"]
-                _write_source_file(final_cv_dest, cv_data, "cv")
-                console.print(f"[green]✓[/green] CV applied to {final_cv_dest}")
-            except json.JSONDecodeError as e:
-                error(f"Failed to parse CV JSON: {e}")
-                console.print(
-                    "[dim]The stored CV content appears to be malformed.[/dim]"
-                )
-                console.print(
-                    "[dim]Try regenerating with: job app w {job_id} --no-letter[/dim]"
-                )
-                raise typer.Exit(1)
-            except Exception as e:
-                error(f"Failed to write CV: {e}")
-                raise typer.Exit(1)
-
-        # Write letter if present
-        if draft.letter_content:
-            if not final_letter_dest:
-                error("No letter destination path specified and none in draft")
-                raise typer.Exit(1)
-
-            try:
-                letter_data = json.loads(draft.letter_content)
-                # If data is already wrapped in {"letter": ...}, extract it
-                if "letter" in letter_data and len(letter_data) == 1:
-                    letter_data = letter_data["letter"]
-                _write_source_file(final_letter_dest, letter_data, "letter")
-                console.print(f"[green]✓[/green] Letter applied to {final_letter_dest}")
-            except json.JSONDecodeError as e:
-                error(f"Failed to parse letter JSON: {e}")
-                console.print(
-                    "[dim]The stored letter content appears to be malformed.[/dim]"
-                )
-                console.print(
-                    "[dim]Try regenerating with: job app w {job_id} --no-cv[/dim]"
-                )
-                raise typer.Exit(1)
-            except Exception as e:
-                error(f"Failed to write letter: {e}")
-                raise typer.Exit(1)
-
-        if not draft.cv_content and not draft.letter_content:
-            console.print("[yellow]No content to apply[/yellow]")
+        _apply_draft_to_files(draft, cv_dest, letter_dest)
 
 
-def _write_source_file(path: str, data: dict, field_name: str) -> None:
-    """Write structured data back to TOML/YAML file.
-
-    Args:
-        path: Destination file path
-        data: Dictionary data to write
-        field_name: Root field name (e.g., 'cv', 'letter')
-
-    Similar to cvx build's writeData function.
-    """
-    import shutil
-    import subprocess
-
-    import yaml
-
-    file_path = Path(path).expanduser()
-
-    # Wrap data in field name
-    wrapper = {field_name: data}
-
-    # Detect format and marshal
-    if path.endswith(".toml"):
-        # Python's tomllib doesn't support writing, use tomli_w
-        try:
-            import tomli_w
-
-            content = tomli_w.dumps(wrapper)
-        except ImportError:
-            error("tomli_w package required for writing TOML files")
-            raise typer.Exit(1)
-    else:
-        content = yaml.dump(wrapper, default_flow_style=False, sort_keys=False)
-
-    # Write to file
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(content, encoding="utf-8")
-
-    # Auto-format TOML with tombi if available
-    if path.endswith(".toml") and shutil.which("tombi"):
-        subprocess.run(["tombi", "format", str(file_path)], check=False)
-
-
-@app.command()
-def rm(
+@app.command(name="d", hidden=True)
+@app.command(name="rm", hidden=True)
+@app.command(name="del")
+def delete_drafts(
     ctx: typer.Context,
     job_id: int = typer.Argument(..., help="Job ID to delete drafts for"),
     draft_id: int = typer.Option(
@@ -570,14 +703,14 @@ def rm(
     ),
 ) -> None:
     """
-    Delete application drafts from database.
+    Delete application drafts from database. (Alias: d)
 
     Delete either all drafts for a job, or a specific draft with -i flag.
     Requires job_id as positional argument.
 
     Examples:
-        job app rm 42           (delete all drafts for job 42)
-        job app rm 42 -i 1      (delete only draft 1 for job 42)
+        job app del 42           (delete all drafts for job 42)
+        job app del 42 -i 1      (delete only draft 1 for job 42)
     """
     app_ctx: AppContext = ctx.obj
 

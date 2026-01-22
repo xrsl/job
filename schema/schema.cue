@@ -47,9 +47,9 @@ package job
 // App command settings
 #JobApp: {
 	model?:  string
-	schema?: string
 	cv?:     string
 	letter?: string
+	extra?: [...string]
 }
 
 // Top-level job settings

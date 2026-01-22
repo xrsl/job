@@ -100,6 +100,8 @@ class JobGH(models.JobGH):
 class JobApp(models.JobApp):
     """Extended JobApp with better defaults."""
 
+    extra: list[str] = Field(default_factory=list)
+
     model_config = models.JobApp.model_config | {"populate_by_name": True}
 
 

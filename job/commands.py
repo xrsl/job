@@ -67,10 +67,11 @@ def get_job_by_id_or_url(session: Session, identifier: str) -> JobAd | None:
 # -------------------------
 # Commands
 # -------------------------
+@app.command(name="l", hidden=True)
 @app.command(name="ls", hidden=True)
 @app.command(name="list")
 def list_jobs(ctx: typer.Context) -> None:
-    """List all stored job ads. (Alias: ls)"""
+    """List all stored job ads. (Alias: l)"""
     app_ctx: AppContext = ctx.obj
     with Session(app_ctx.engine) as session:
         jobs = session.exec(select(JobAd).order_by(desc(JobAd.id))).all()
@@ -82,12 +83,17 @@ def list_jobs(ctx: typer.Context) -> None:
     format_job_table(jobs)
 
 
-@app.command()
-def show(
+@app.command(name="v", hidden=True)
+@app.command(name="show", hidden=True)
+@app.command(name="view")
+def view_job(
     ctx: typer.Context,
     identifier: str = typer.Argument(..., help="Job ID or URL"),
+    json_output: bool = typer.Option(False, "--json", help="Output as raw JSON"),
 ) -> None:
-    """Show a single job ad by ID or URL."""
+    """View a single job ad by ID or URL. (Alias: v)"""
+    from rich.panel import Panel
+
     app_ctx: AppContext = ctx.obj
 
     with Session(app_ctx.engine) as session:
@@ -98,15 +104,72 @@ def show(
             error(f"No job found with ID or URL matching: {identifier}")
             raise typer.Exit(1)
 
-        typer.echo(job.model_dump_json(indent=2))
+        if json_output:
+            typer.echo(job.model_dump_json(indent=2))
+        else:
+            # Rich formatted output
+            console.print()
+            console.print(
+                Panel(
+                    f"[bold]{job.title or 'N/A'}[/bold]\n"
+                    f"[dim]{job.company or 'N/A'} • {job.location or 'N/A'}[/dim]\n"
+                    f"[link={job.job_posting_url}]{job.job_posting_url}[/link]",
+                    title=f"Job Ad #{job.id}",
+                    border_style="blue",
+                )
+            )
+
+            # Job Details
+            console.print()
+            details = []
+            if job.department:
+                details.append(f"[bold]Department:[/bold] {job.department}")
+            if job.deadline:
+                details.append(f"[bold]Deadline:[/bold] {job.deadline}")
+            if job.hiring_manager:
+                details.append(f"[bold]Hiring Manager:[/bold] {job.hiring_manager}")
+            if job.posted_at:
+                details.append(
+                    f"[bold]Posted:[/bold] {job.posted_at.strftime('%Y-%m-%d')}"
+                )
+            if job.github_issue_url:
+                details.append(
+                    f"[bold]GitHub Issue:[/bold] [link={job.github_issue_url}]{job.github_issue_url}[/link]"
+                )
+
+            if details:
+                console.print(
+                    Panel(
+                        "\n".join(details),
+                        title="Details",
+                        border_style="cyan",
+                    )
+                )
+
+            # Full Job Description
+            if job.full_ad:
+                console.print()
+                # Replace literal \n with actual newlines for display
+                formatted_ad = job.full_ad.replace("\\n", "\n")
+                console.print(
+                    Panel(
+                        formatted_ad,
+                        title="Job Description",
+                        border_style="green",
+                    )
+                )
+
+            console.print()
 
 
-@app.command()
-def rm(
+@app.command(name="d", hidden=True)
+@app.command(name="rm", hidden=True)
+@app.command(name="del")
+def delete_job(
     ctx: typer.Context,
     identifier: str = typer.Argument(..., help="Job ID or URL"),
 ) -> None:
-    """Delete a job ad by ID or URL."""
+    """Delete a job ad by ID or URL. (Alias: d)"""
     app_ctx: AppContext = ctx.obj
 
     with Session(app_ctx.engine) as session:
@@ -123,12 +186,14 @@ def rm(
     typer.echo(f"Deleted job {job.id}: {url}")
 
 
-@app.command()
-def find(
+@app.command(name="q", hidden=True)
+@app.command(name="find", hidden=True)
+@app.command(name="query")
+def query_jobs(
     ctx: typer.Context,
     query: str = typer.Argument(..., help="Search keywords"),
 ) -> None:
-    """Find jobs in local database by keyword (title, company, department, location, body)."""
+    """Query jobs in local database by keyword (title, company, department, location, body). (Alias: q)"""
     app_ctx: AppContext = ctx.obj
     q = f"%{query.lower()}%"
     app_ctx.logger.debug(f"Searching for: {query}")
@@ -165,7 +230,7 @@ def export(
     ),
     query: str = typer.Option(None, "--query", "-q", help="Filter by search query"),
 ) -> None:
-    """Export jobs to JSON format.
+    """Export jobs to JSON format. (Alias: e)
 
     Export specific jobs by ID or URL (repeatable flags), or all jobs matching a query.
     Examples:

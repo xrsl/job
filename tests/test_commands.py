@@ -67,27 +67,27 @@ def test_ls_shows_ids(prepopulated_db):
     assert "2" in result.output
 
 
-def test_show_by_id(prepopulated_db):
-    result = runner.invoke(app, ["show", "1"])
+def test_view_by_id(prepopulated_db):
+    result = runner.invoke(app, ["view", "1", "--json"])
     assert result.exit_code == 0
     assert "Job One" in result.output
     assert "https://example.com/1" in result.output
 
 
-def test_show_by_url(prepopulated_db):
-    result = runner.invoke(app, ["show", "https://example.com/2"])
+def test_view_by_url(prepopulated_db):
+    result = runner.invoke(app, ["view", "https://example.com/2", "--json"])
     assert result.exit_code == 0
     assert "Job Two" in result.output
 
 
-def test_rm_by_id(prepopulated_db):
+def test_del_by_id(prepopulated_db):
     # Remove job 1
-    result = runner.invoke(app, ["rm", "1"])
+    result = runner.invoke(app, ["del", "1"])
     assert result.exit_code == 0
     assert "Deleted job 1" in result.output
 
     # Verify gone
-    result = runner.invoke(app, ["ls"])
+    result = runner.invoke(app, ["list"])
     assert "Job One" not in result.output
     assert "Job Two" in result.output
 

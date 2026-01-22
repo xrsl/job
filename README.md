@@ -26,7 +26,7 @@ job add https://spotify.com/careers/backend-engineer
 **3. Tracking** – Query and export your job pipeline
 
 ```bash
-job find "python"
+job query "python"
 job export --format csv -o applications.csv
 ```
 
@@ -119,10 +119,10 @@ job fit view -i 1 -a 5
 
 ```bash
 # Delete specific assessment
-job fit rm -a 5
+job fit del -a 5
 
 # Delete all assessments for a job
-job fit rm -i 1
+job fit del -i 1
 ```
 
 ### Aliases
@@ -362,11 +362,11 @@ job add https://example.com/job --no-structured  # Override
 job search [--company NAME] [--keyword KW] [--extra KW]
 job add <url> [--model MODEL] [--no-cache]
 job list
-job find <query>
-job show <url>
+job query <query>
+job view <url>
 job export [--format json|csv] [-o FILE] [--query FILTER]
 job info
-job rm <url>
+job del <url>
 ```
 
 ### Fit Assessment
@@ -380,8 +380,8 @@ job fit view -i <JOB_ID>          # List all for job
 job fit view -a <ASSESSMENT_ID>   # View specific
 
 # Delete assessments
-job fit rm -a <ASSESSMENT_ID>     # Delete one
-job fit rm -i <JOB_ID>            # Delete all for job
+job fit del -a <ASSESSMENT_ID>     # Delete one
+job fit del -i <JOB_ID>            # Delete all for job
 
 # Aliases: f (fit), v (view)
 job f 1 --cv cv.toml -e persona.md

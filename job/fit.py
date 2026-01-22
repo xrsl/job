@@ -4,7 +4,7 @@ from functools import cache
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
-from sqlmodel import Session, select
+from sqlmodel import Session, desc, select
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
 from pydantic import ValidationError
@@ -396,7 +396,7 @@ def view(
         assessments = session.exec(
             select(JobFitAssessment)
             .where(JobFitAssessment.job_id == job_id)
-            .order_by(JobFitAssessment.created_at.desc())
+            .order_by(desc(JobFitAssessment.created_at))
         ).all()
 
         if not assessments:
@@ -482,8 +482,132 @@ def view(
             raise typer.Exit(1)
 
 
-@app.command()
-def rm(
+@app.command(name="l", hidden=True)
+@app.command(name="list")
+def list_assessments(
+    ctx: typer.Context,
+    job_id: int = typer.Argument(
+        None, help="Job ID to list assessments for (optional)"
+    ),
+) -> None:
+    """
+    List fit assessments. (Alias: l)
+
+    List all assessments globally or for a specific job if job_id is provided.
+
+    Examples:
+        job fit list             (list all assessments)
+        job fit l                (using alias)
+        job fit list 42          (list assessments for job 42)
+    """
+    from rich.table import Table
+
+    app_ctx: AppContext = ctx.obj
+
+    with Session(app_ctx.engine) as session:
+        # Build query
+        if job_id is not None:
+            # Verify job exists
+            job = session.get(JobAd, job_id)
+            if not job:
+                error(f"No job found with ID: {job_id}")
+                raise typer.Exit(1)
+
+            # Get assessments for this job
+            assessments = session.exec(
+                select(JobFitAssessment)
+                .where(JobFitAssessment.job_id == job_id)
+                .order_by(desc(JobFitAssessment.created_at))
+            ).all()
+
+            if not assessments:
+                console.print(f"[yellow]No assessments found for job {job_id}[/yellow]")
+                console.print(
+                    f"[dim]Run 'job fit run {job_id}' to create an assessment[/dim]"
+                )
+                return
+
+            # Display header
+            console.print()
+            console.print(
+                Panel(
+                    f"[bold]{job.title}[/bold]\n[dim]{job.company} • {job.location}[/dim]",
+                    title="Job Posting",
+                    border_style="blue",
+                )
+            )
+        else:
+            # Get all assessments across all jobs
+            assessments = session.exec(
+                select(JobFitAssessment).order_by(desc(JobFitAssessment.created_at))
+            ).all()
+
+            if not assessments:
+                console.print("[yellow]No fit assessments found[/yellow]")
+                console.print(
+                    "[dim]Run 'job fit run <job_id>' to create assessments[/dim]"
+                )
+                return
+
+        # Display table
+        console.print()
+        table = Table(show_header=True, header_style="bold cyan")
+
+        if job_id is None:
+            table.add_column("Job ID", style="dim", width=8)
+
+        table.add_column("Assess ID", style="dim", width=10)
+        table.add_column("Date", width=20)
+        table.add_column("Model", width=20)
+        table.add_column("Score", width=10)
+
+        if job_id is None:
+            table.add_column("Job Title", width=30)
+
+        for assessment in assessments:
+            # Color code score
+            if assessment.overall_fit_score >= 80:
+                score_display = f"[green]{assessment.overall_fit_score}[/green]"
+            elif assessment.overall_fit_score >= 60:
+                score_display = f"[yellow]{assessment.overall_fit_score}[/yellow]"
+            elif assessment.overall_fit_score >= 40:
+                score_display = f"[orange1]{assessment.overall_fit_score}[/orange1]"
+            else:
+                score_display = f"[red]{assessment.overall_fit_score}[/red]"
+
+            if job_id is None:
+                # Get job info for this assessment
+                job_for_assessment = session.get(JobAd, assessment.job_id)
+                job_title = (
+                    job_for_assessment.title if job_for_assessment else "Unknown"
+                )
+                if len(job_title) > 27:
+                    job_title = job_title[:24] + "..."
+
+                table.add_row(
+                    str(assessment.job_id),
+                    str(assessment.id),
+                    assessment.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    assessment.model_name,
+                    score_display,
+                    job_title,
+                )
+            else:
+                table.add_row(
+                    str(assessment.id),
+                    assessment.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    assessment.model_name,
+                    score_display,
+                )
+
+        console.print(table)
+        console.print()
+
+
+@app.command(name="d", hidden=True)
+@app.command(name="rm", hidden=True)
+@app.command(name="del")
+def delete_assessments(
     ctx: typer.Context,
     job_id: int = typer.Argument(..., help="Job ID to delete assessments for"),
     assessment_id: int = typer.Option(
@@ -493,14 +617,14 @@ def rm(
     ),
 ) -> None:
     """
-    Delete fit assessments from database.
+    Delete fit assessments from database. (Alias: d)
 
     Delete either all assessments for a job, or a specific assessment with -i flag.
     Requires job_id as positional argument.
 
     Examples:
-        job fit rm 1              (delete all assessments for job 1)
-        job fit rm 1 -i 2         (delete only assessment 2 for job 1)
+        job fit del 1              (delete all assessments for job 1)
+        job fit del 1 -i 2         (delete only assessment 2 for job 1)
     """
     app_ctx: AppContext = ctx.obj
 

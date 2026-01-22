@@ -54,13 +54,16 @@
         "cv": {
           "type": "string"
         },
+        "extra": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "letter": {
           "type": "string"
         },
         "model": {
-          "type": "string"
-        },
-        "schema": {
           "type": "string"
         }
       }
