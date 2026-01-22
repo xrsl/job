@@ -1,3 +1,6 @@
+import json
+import re
+import subprocess
 import typer
 from functools import cache
 from sqlmodel import Session, select
@@ -139,11 +142,153 @@ def _build_job_data(
     return job_data
 
 
+def fetch_github_issue(issue_number: int, ctx: AppContext) -> dict:
+    """Fetch GitHub issue details using gh CLI.
+
+    Args:
+        issue_number: The GitHub issue number
+        ctx: Application context
+
+    Returns:
+        Dict with issue data (title, body, url, etc.)
+
+    Raises:
+        typer.Exit: If issue fetch fails
+    """
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "view",
+                str(issue_number),
+                "--json",
+                "title,body,url,author",
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            error(f"Failed to fetch GitHub issue {issue_number}: {result.stderr}")
+            raise typer.Exit(1)
+
+        issue_data = json.loads(result.stdout.strip())
+        return issue_data
+
+    except json.JSONDecodeError as e:
+        error(f"Failed to parse GitHub issue JSON: {e}")
+        raise typer.Exit(1)
+    except FileNotFoundError:
+        error("gh CLI not found. Please install GitHub CLI (gh) and authenticate")
+        raise typer.Exit(1)
+
+
+def parse_job_from_issue_body(body: str) -> dict:
+    """Parse job data from GitHub issue body.
+
+    The issue body is expected to be in the format created by 'job gh issue'.
+
+    Args:
+        body: The issue body text
+
+    Returns:
+        Dict with extracted job data
+    """
+    # Extract fields using regex patterns
+    patterns = {
+        "company": r"\*\*Company:\*\*\s*(.+)",
+        "location": r"\*\*Location:\*\*\s*(.+)",
+        "department": r"\*\*Department:\*\*\s*(.+)",
+        "deadline": r"\*\*Deadline:\*\*\s*(.+)",
+        "hiring_manager": r"\*\*Hiring Manager:\*\*\s*(.+)",
+        "job_posting_url": r"\*\*Job Posting:\*\*\s*(.+)",
+    }
+
+    job_data = {}
+    for field, pattern in patterns.items():
+        match = re.search(pattern, body, re.MULTILINE)
+        if match:
+            value = match.group(1).strip()
+            # Convert "N/A" to empty string
+            job_data[field] = "" if value == "N/A" else value
+        else:
+            job_data[field] = ""
+
+    # Extract full job description (everything after "## Full Job Description")
+    full_ad_match = re.search(r"## Full Job Description\s*\n\n(.+)", body, re.DOTALL)
+    if full_ad_match:
+        job_data["full_ad"] = full_ad_match.group(1).strip()
+    else:
+        # Fallback: use the entire body as full_ad
+        job_data["full_ad"] = body.strip()
+
+    return job_data
+
+
+def _build_job_data_from_issue(
+    issue_number: int,
+    structured: bool,
+    ctx: AppContext,
+    model: str | None = None,
+) -> dict:
+    """Build job data dict from GitHub issue.
+
+    Args:
+        issue_number: GitHub issue number
+        structured: If True, use AI to extract structured fields
+        ctx: Application context
+
+    Returns:
+        Dict with job data ready for database insertion
+    """
+    # Fetch issue data
+    with console.status(
+        f"[bold dim]Fetching GitHub issue #{issue_number}...[/bold dim]"
+    ):
+        issue_data = fetch_github_issue(issue_number, ctx)
+
+    title = issue_data["title"]
+    body = issue_data["body"]
+    issue_url = issue_data["url"]
+
+    # Parse job data from issue body
+    job_data = parse_job_from_issue_body(body)
+
+    # Set title from issue title if not found in body
+    if not job_data.get("title"):
+        job_data["title"] = title
+
+    # If structured extraction is requested, use AI to refine the data
+    if structured:
+        model_name = ctx.config.get_model(model)
+        with console.status(
+            f"[bold dim]Extracting fields using {model_name}...[/bold dim]"
+        ):
+            # Create a combined text for AI extraction
+            combined_text = f"Title: {title}\n\n{body}"
+            job_info = extract_job_info(issue_url, combined_text, ctx, model=model_name)
+            # Merge AI-extracted data with parsed data
+            ai_data = job_info.model_dump()
+            ai_data["job_posting_url"] = job_data.get("job_posting_url", issue_url)
+            # Keep original full_ad from issue
+            ai_data["full_ad"] = job_data["full_ad"]
+            job_data = ai_data
+    else:
+        # Ensure required fields are set
+        job_data.setdefault("job_posting_url", issue_url)
+
+    return job_data
+
+
 @app.command(name="a", hidden=True)
 @app.command(name="add")
 def add(
     ctx: typer.Context,
-    url: str = typer.Argument(..., help="Job posting URL"),
+    url: str = typer.Argument(None, help="Job posting URL"),
+    from_issue: int = typer.Option(
+        None, "--from-issue", "-i", help="GitHub issue number to create job from"
+    ),
     structured: bool = typer.Option(
         None,
         "--structured",
@@ -168,13 +313,23 @@ def add(
     By default, uses fast static fetching (requests).
     Use --browser to use a full browser (Playwright) for JS-heavy sites.
     Use --structured to extract structured fields (title, company, etc.) via AI.
+    Use --from-issue to create a job from an existing GitHub issue.
 
     Examples:
         job add https://example.com/job
         job add https://example.com/job --structured
         job add https://example.com/job  # uses defaults from job.toml
+        job add --from-issue 45
     """
     app_ctx: AppContext = ctx.obj
+
+    # Validate that either url or from_issue is provided, but not both
+    if url and from_issue:
+        error("Cannot specify both URL and --from-issue")
+        raise typer.Exit(1)
+    if not url and not from_issue:
+        error("Must specify either URL or --from-issue")
+        raise typer.Exit(1)
 
     # Use config defaults if flags not explicitly provided
     final_structured = (
@@ -183,17 +338,26 @@ def add(
     final_browser = browser if browser is not None else app_ctx.config.add.browser
     final_model = app_ctx.config.get_model(model or app_ctx.config.add.model)
 
-    final_url = validate_url(url)
-    app_ctx.logger.debug(f"Processing URL: {final_url}")
+    if from_issue:
+        # Handle GitHub issue case
+        app_ctx.logger.debug(f"Processing GitHub issue: {from_issue}")
+        job_data = _build_job_data_from_issue(
+            from_issue, final_structured, app_ctx, model=final_model
+        )
+        final_url = job_data["job_posting_url"]  # Extract URL from issue
+    else:
+        # Handle URL case
+        final_url = validate_url(url)
+        app_ctx.logger.debug(f"Processing URL: {final_url}")
 
-    # Fetch job content
-    with console.status("[bold dim]Fetching job page...[/bold dim]"):
-        fetch_result = fetch_job_text(final_url, app_ctx, use_browser=final_browser)
-    app_ctx.logger.debug("job_text_fetched", chars=len(fetch_result.content))
+        # Fetch job content
+        with console.status("[bold dim]Fetching job page...[/bold dim]"):
+            fetch_result = fetch_job_text(final_url, app_ctx, use_browser=final_browser)
+        app_ctx.logger.debug("job_text_fetched", chars=len(fetch_result.content))
 
-    job_data = _build_job_data(
-        final_url, fetch_result, final_structured, app_ctx, model=final_model
-    )
+        job_data = _build_job_data(
+            final_url, fetch_result, final_structured, app_ctx, model=final_model
+        )
 
     with Session(app_ctx.engine) as session:
         # Check for existing entry

@@ -18,6 +18,7 @@ from job.app import app as app_app
 from job.db import app as db_app
 from job.gh import app as gh_app
 from job.lm import app as lm_app
+from job.upt import app as upt_app, update
 
 console = Console()
 
@@ -89,3 +90,5 @@ app.add_typer(app_app, name="app")
 app.add_typer(lm_app, name="lm")
 app.add_typer(db_app, name="db")
 app.add_typer(gh_app, name="gh")
+app.add_typer(upt_app, name="upt")
+app.command(name="u", hidden=True)(update)

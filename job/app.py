@@ -205,16 +205,35 @@ def _apply_draft_to_files(
             raise typer.Exit(1)
 
         try:
+            # Try parsing as JSON first (AI should output dict serialized as JSON)
             cv_data = json.loads(draft.cv_content)
             # If data is already wrapped in {"cv": ...}, extract it
             if "cv" in cv_data and len(cv_data) == 1:
                 cv_data = cv_data["cv"]
+        except json.JSONDecodeError:
+            # If JSON parsing fails, try parsing as TOML/YAML content
+            try:
+                if final_cv_dest.endswith(".toml"):
+                    import tomllib
+
+                    cv_data = tomllib.loads(draft.cv_content)
+                else:
+                    import yaml
+
+                    cv_data = yaml.safe_load(draft.cv_content)
+                # Extract the cv field if present
+                if "cv" in cv_data and len(cv_data) == 1:
+                    cv_data = cv_data["cv"]
+            except Exception as e:
+                error(f"Failed to parse CV content as JSON, TOML, or YAML: {e}")
+                console.print(
+                    "[dim]The stored CV content appears to be malformed.[/dim]"
+                )
+                raise typer.Exit(1)
+
+        try:
             _write_source_file(final_cv_dest, cv_data, "cv")
             console.print(f"[green]✓[/green] CV applied to {final_cv_dest}")
-        except json.JSONDecodeError as e:
-            error(f"Failed to parse CV JSON: {e}")
-            console.print("[dim]The stored CV content appears to be malformed.[/dim]")
-            raise typer.Exit(1)
         except Exception as e:
             error(f"Failed to write CV: {e}")
             raise typer.Exit(1)
@@ -226,18 +245,35 @@ def _apply_draft_to_files(
             raise typer.Exit(1)
 
         try:
+            # Try parsing as JSON first (AI should output dict serialized as JSON)
             letter_data = json.loads(draft.letter_content)
             # If data is already wrapped in {"letter": ...}, extract it
             if "letter" in letter_data and len(letter_data) == 1:
                 letter_data = letter_data["letter"]
+        except json.JSONDecodeError:
+            # If JSON parsing fails, try parsing as TOML/YAML content
+            try:
+                if final_letter_dest.endswith(".toml"):
+                    import tomllib
+
+                    letter_data = tomllib.loads(draft.letter_content)
+                else:
+                    import yaml
+
+                    letter_data = yaml.safe_load(draft.letter_content)
+                # Extract the letter field if present
+                if "letter" in letter_data and len(letter_data) == 1:
+                    letter_data = letter_data["letter"]
+            except Exception as e:
+                error(f"Failed to parse letter content as JSON, TOML, or YAML: {e}")
+                console.print(
+                    "[dim]The stored letter content appears to be malformed.[/dim]"
+                )
+                raise typer.Exit(1)
+
+        try:
             _write_source_file(final_letter_dest, letter_data, "letter")
             console.print(f"[green]✓[/green] Letter applied to {final_letter_dest}")
-        except json.JSONDecodeError as e:
-            error(f"Failed to parse letter JSON: {e}")
-            console.print(
-                "[dim]The stored letter content appears to be malformed.[/dim]"
-            )
-            raise typer.Exit(1)
         except Exception as e:
             error(f"Failed to write letter: {e}")
             raise typer.Exit(1)
