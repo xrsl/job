@@ -87,10 +87,10 @@ build-install: build
     uv tool install dist/*.whl --force
     @echo "✅ installed job CLI tool"
 
-alias i := editable-install
+alias ei := editable-install
 # Install job CLI tool in editable mode (for development)
-editable-install: uninstall
-    uv tool install --editable . --python 3.12 # --force
+editable-install:
+    uv tool install --editable . --python 3.12
     @echo "✅ installed job CLI tool in editable mode"
 
 alias gi := git-install
@@ -99,7 +99,7 @@ git-install:
     uv tool install git+https://github.com/xrsl/job.git --python 3.12
     @echo "✅ installed job CLI tool from git"
 
-
+alias u := uninstall
 # Uninstall job CLI tool
 uninstall:
     uv tool uninstall job
