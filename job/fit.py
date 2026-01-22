@@ -15,7 +15,7 @@ from job.utils import error
 console = Console()
 
 # Create sub-app for fit commands
-app = typer.Typer(help="Job fit assessment commands (Alias: f)")
+app = typer.Typer(no_args_is_help=True, help="Assess job fit with ai (Alias: f)")
 
 
 @cache

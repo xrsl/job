@@ -15,7 +15,10 @@ from job.utils import error
 console = Console()
 
 # Create sub-app for app commands
-app = typer.Typer(help="Job application document generation commands")
+app = typer.Typer(
+    no_args_is_help=True,
+    help="Write/manage application documents with ai",
+)
 
 
 @cache

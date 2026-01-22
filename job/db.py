@@ -9,7 +9,7 @@ from job.utils import error
 console = Console()
 
 # Create sub-app for db commands
-app = typer.Typer(help="Job database management commands")
+app = typer.Typer(no_args_is_help=True, help="Job database management commands")
 
 
 @app.command()

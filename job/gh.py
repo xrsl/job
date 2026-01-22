@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from job.core import AppContext, JobAd, JobFitAssessment
 from job.utils import error
@@ -16,62 +16,34 @@ from job.utils import error
 console = Console()
 
 # Create sub-app for GitHub commands
-app = typer.Typer(help="GitHub integration commands")
+app = typer.Typer(no_args_is_help=True, help="GitHub integration commands")
 
 
-def get_job_by_id_or_url(
-    session: Session, job_id: int | None, url: str | None
-) -> JobAd:
-    """Get job from database by ID or URL.
+def get_job_by_id(session: Session, job_id: int) -> JobAd:
+    """Get job from database by ID.
 
     Args:
         session: Database session
-        job_id: Job ID (optional)
-        url: Job URL (optional)
+        job_id: Job ID
 
     Returns:
         JobAd instance
 
     Raises:
-        typer.Exit: If job not found or invalid arguments
+        typer.Exit: If job not found
     """
-    if job_id is None and url is None:
-        error("Must provide either --id or --url")
-        raise typer.Exit(1)
-
-    if job_id is not None and url is not None:
-        error("Cannot provide both --id and --url")
-        raise typer.Exit(1)
-
-    if job_id is not None:
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
-        return job
-
-    # Look up by URL
-    from job.utils import validate_url
-
-    # Type assertion: url is guaranteed to be str here due to earlier checks
-    assert url is not None
-    final_url = validate_url(url)
-    job = session.exec(select(JobAd).where(JobAd.job_posting_url == final_url)).first()
-
+    job = session.get(JobAd, job_id)
     if not job:
-        error(f"Job not found in database: {final_url}")
-        console.print("[dim]Run 'job add <url>' first to add the job[/dim]")
+        error(f"No job found with ID: {job_id}")
         raise typer.Exit(1)
-
     return job
 
 
-@app.command(name="i", hidden=True)
-@app.command()
+@app.command(name="i", hidden=True, no_args_is_help=True)
+@app.command(no_args_is_help=True)
 def issue(
     ctx: typer.Context,
-    job_id: int = typer.Option(None, "--id", "-i", help="Job ID from database"),
-    url: str = typer.Option(None, "--url", "-u", help="Job posting URL"),
+    from_job: int = typer.Option(..., "--from-job", "-f", help="Job ID from database"),
     repo: str = typer.Option(
         None,
         "--repo",
@@ -87,9 +59,9 @@ def issue(
     by tracking which jobs have already been posted (unless --force is used).
 
     Examples:
-        job gh issue --id 2 --repo xrsl/cv
-        job gh i --url https://example.com/job --repo owner/repo
-        job gh i --id 2  # uses repo from job.toml
+        job gh issue --from-job 2 --repo xrsl/cv
+        job gh i -f 2 --repo owner/repo
+        job gh i -f 2  # uses repo from job.toml
     """
     app_ctx: AppContext = ctx.obj
 
@@ -102,7 +74,7 @@ def issue(
 
     with Session(app_ctx.engine) as session:
         # Get the job
-        job = get_job_by_id_or_url(session, job_id, url)
+        job = get_job_by_id(session, from_job)
 
         # Check if already posted
         if job.github_issue_number is not None and not force:
@@ -183,8 +155,8 @@ def issue(
             Path(temp_path).unlink(missing_ok=True)
 
 
-@app.command(name="c", hidden=True)
-@app.command()
+@app.command(name="c", hidden=True, no_args_is_help=True)
+@app.command(no_args_is_help=True)
 def comment(
     ctx: typer.Context,
     assessment_id: int = typer.Option(

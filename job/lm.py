@@ -8,7 +8,7 @@ from pydantic_ai.models import KnownModelName
 
 console = Console()
 app = typer.Typer(
-    invoke_without_command=True, help="List models supported by pydantic-ai"
+    invoke_without_command=True, help="List ai models supported by pydantic-ai"
 )
 
 
