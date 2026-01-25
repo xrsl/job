@@ -1,9 +1,8 @@
-import json
 import typer
 from rich.console import Console
 from sqlmodel import Session, select, func
 
-from job.core import AppContext, JobAd, JobFitAssessment
+from job.core import AppContext, JobAd, JobFitAssessment, JobAppDraft
 from job.utils import error
 
 console = Console()
@@ -40,18 +39,18 @@ def stats(ctx: typer.Context) -> None:
 
     with Session(app_ctx.engine) as session:
         # Count jobs
-        njobs = session.exec(select(func.count(JobAd.id))).one()
+        n_jobs = session.exec(select(func.count(JobAd.id))).one()
 
         # Count assessments
-        nassessments = session.exec(select(func.count(JobFitAssessment.id))).one()
+        n_fits = session.exec(select(func.count(JobFitAssessment.id))).one()
 
-        # Output as JSON
-        stats_data = {
-            "njobs": njobs,
-            "nassessments": nassessments,
-        }
+        # Count app drafts
+        n_apps = session.exec(select(func.count(JobAppDraft.id))).one()
 
-        console.print(json.dumps(stats_data))
+        # Output each stat on a new line
+        console.print(f"n_jobs: {n_jobs}")
+        console.print(f"n_fits: {n_fits}")
+        console.print(f"n_apps: {n_apps}")
 
 
 @app.command(name="del")
