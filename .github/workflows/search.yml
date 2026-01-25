@@ -1,9 +1,9 @@
 name: Job Search
 
 on:
-  schedule:
-    # Run at 08:00 UTC every day
-    - cron: "0 8 * * *"
+  # schedule:
+  #   # Run at 08:00 UTC every day
+  #   - cron: "0 8 * * *"
   workflow_dispatch:
 
 jobs:
