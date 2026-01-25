@@ -615,37 +615,59 @@ def write(
 @app.command()
 def view(
     ctx: typer.Context,
-    job_id: int = typer.Argument(..., help="Job ID to view draft for"),
-    draft_id: int = typer.Option(..., "-i", help="Draft ID to view"),
+    id_arg: int = typer.Argument(
+        ..., help="Draft ID, or Job ID if -i is specified", metavar="ID"
+    ),
+    draft_id_opt: int | None = typer.Option(
+        None, "-i", "--id", help="Draft ID (if first arg is Job ID)"
+    ),
 ) -> None:
     """
     View a specific application draft. (Alias: v)
 
     Display the generated CV and/or cover letter content.
-    Requires both job_id and -i draft_id.
+    Can be used in two ways:
+    1. job app view <draft_id>
+    2. job app view <job_id> -i <draft_id> (legacy/explicit)
 
     Examples:
-        job app view 42 -i 1
-        job app v 42 -i 1
+        job app view 2           (view draft 2)
+        job app v 2              (view draft 2 using alias)
+        job app v 42 -i 1        (view draft 1 for job 42)
     """
     app_ctx: AppContext = ctx.obj
 
     with Session(app_ctx.engine) as session:
-        # Verify job exists
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
+        # Determine draft_id and optional job_verification_id
+        target_draft_id = None
+        job_verification_id = None
+
+        if draft_id_opt is not None:
+            # Case 2: job_id and draft_id provided
+            job_verification_id = id_arg
+            target_draft_id = draft_id_opt
+        else:
+            # Case 1: Only draft_id provided
+            target_draft_id = id_arg
 
         # Get draft
-        draft = session.get(JobAppDraft, draft_id)
+        draft = session.get(JobAppDraft, target_draft_id)
         if not draft:
-            error(f"No draft found with ID: {draft_id}")
+            error(f"No draft found with ID: {target_draft_id}")
             raise typer.Exit(1)
 
-        # Verify draft belongs to job
-        if draft.job_id != job_id:
-            error(f"Draft {draft_id} does not belong to job {job_id}")
+        # If job ID was provided, verify it matches
+        if job_verification_id is not None and draft.job_id != job_verification_id:
+            error(
+                f"Draft {target_draft_id} does not belong to job {job_verification_id}"
+            )
+            raise typer.Exit(1)
+
+        # Get job info from the draft
+        job = session.get(JobAd, draft.job_id)
+        if not job:
+            # Should not happen given foreign key, but good to check
+            error(f"Job not found for draft {target_draft_id} (Job ID: {draft.job_id})")
             raise typer.Exit(1)
 
         # Display header
