@@ -19,7 +19,7 @@ job search --company spotify --keyword "senior backend"
 **2. Extraction** – AI extracts structured data from job postings
 
 ```bash
-job add https://spotify.com/careers/backend-engineer
+job add --structured https://spotify.com/careers/backend-engineer
 # → Parses title, location, deadline, full description
 ```
 
@@ -27,7 +27,7 @@ job add https://spotify.com/careers/backend-engineer
 
 ```bash
 job query "python"
-job export --format csv -o applications.csv
+job export -o jobs.json
 ```
 
 **4. Fit Assessment** – AI analyzes how well jobs match your background
@@ -49,6 +49,19 @@ job gh issue --id 1 --repo owner/repo
 # Post assessment as comment
 job gh comment -a 5 --repo owner/repo --issue 12
 job gh comment -a 5  # auto-detect repo/issue from job
+```
+
+**6. Application Documents** – AI-generated CVs and cover letters
+
+```bash
+# Generate tailored CV and cover letter
+job app write 42 --cv cv.toml --letter letter.toml
+
+# View generated drafts
+job app view 1
+
+# List all drafts
+job app list
 ```
 
 ## Job Fit Assessment
@@ -245,6 +258,78 @@ job gh i --id 1 --repo x/y    # issue
 job gh c -a 5                 # comment
 ```
 
+## Application Documents
+
+Generate tailored CVs and cover letters using AI, with automatic updates to your source files.
+
+### Generating Documents
+
+```bash
+# Generate both CV and cover letter for a job
+job app write 42 --cv cv.toml --letter letter.toml
+
+# Generate CV only
+job app write 42 --no-letter
+
+# Generate cover letter only
+job app write 42 --no-cv
+
+# Add context files for better personalization
+job app write 42 --cv cv.toml -e persona.md -e experience.md
+
+# Store in database without modifying source files
+job app write 42 --cv cv.toml --no-apply
+```
+
+### Workflow
+
+```bash
+# 1. Add a job to your database
+job add https://example.com/senior-engineer
+
+# 2. Generate tailored application documents
+job app write 1 --cv cv.toml --letter letter.toml
+# → AI analyzes job requirements and your background
+# → Generates tailored CV highlighting relevant experience
+# → Generates cover letter addressing key requirements
+# → Automatically updates cv.toml and letter.toml
+
+# 3. Review generated content
+job app view 1
+
+# 4. Re-apply a draft to different files
+job app apply 1 -i 1 --cv-dest tailored-cv.toml
+```
+
+### Managing Drafts
+
+```bash
+# List all drafts
+job app list
+
+# List drafts for a specific job
+job app list 42
+
+# View a specific draft
+job app view 1
+
+# Delete a specific draft
+job app del 42 -i 1
+
+# Delete all drafts for a job
+job app del 42
+```
+
+### Aliases
+
+```bash
+job app w 42 --cv cv.toml     # write
+job app v 1                   # view
+job app l                     # list
+job app a 42 -i 1             # apply
+job app d 42                  # del
+```
+
 ## Configuration
 
 Create `job.toml` to set defaults for all commands ([tombi VSCode Extension](https://tombi-toml.github.io/tombi/docs/editors/vscode-extension) recommended for schema validation):
@@ -276,9 +361,12 @@ cv = "~/Documents/cv.md"  # Default CV path
 # browser = false    # Use browser by default
 # model = "gemini-2.5-flash"
 
-# Export defaults
-[job.export]
-# output-format = "json"
+# Application document generation defaults
+[job.app]
+cv = "~/Documents/cv.toml"           # Default CV source
+letter = "~/Documents/letter.toml"   # Default letter source
+# extra = ["~/Documents/persona.md"]
+# model = "gemini-2.5-flash"
 
 # Job search configuration
 [job.search]
@@ -299,6 +387,7 @@ keywords = ["typescript", "react"]  # Override defaults
 company = "Stripe"
 url = "https://stripe.com/jobs/search"
 extra-keywords = ["fintech", "payments"]  # Merge with defaults
+# enabled = false  # Temporarily disable this page
 ```
 
 ### Configuration Precedence
@@ -364,7 +453,7 @@ job add <url> [--model MODEL] [--no-cache]
 job list
 job query <query>
 job view <url>
-job export [--format json|csv] [-o FILE] [--query FILTER]
+job export [IDENTIFIER] [-o FILE] [--query FILTER]
 job info
 job del <url>
 ```
@@ -404,6 +493,25 @@ job gh i --id 1 --repo user/repo
 job gh c -a 5
 ```
 
+### Application Documents
+
+```bash
+# Generate tailored documents
+job app write <JOB_ID> --cv <PATH> --letter <PATH>
+job app write <JOB_ID> --no-letter          # CV only
+job app write <JOB_ID> --no-apply           # Don't modify source files
+
+# View and manage drafts
+job app view <DRAFT_ID>
+job app list [JOB_ID]
+job app apply <JOB_ID> -i <DRAFT_ID>
+job app del <JOB_ID> [-i <DRAFT_ID>]
+
+# Aliases: w (write), v (view), l (list), a (apply), d (del)
+job app w 1 --cv cv.toml
+job app v 1
+```
+
 ### Database
 
 ```bash
@@ -411,6 +519,23 @@ job db path       # Show database path
 job db stats      # Show statistics
 job db migrate    # Migrate schema to latest version
 job db del        # Delete database
+```
+
+### Utilities
+
+```bash
+# List supported AI models
+job lm                        # All models
+job lm gemini                 # Filter by provider
+job lm -e preview             # Exclude preview models
+
+# Update job fields
+job upt <JOB_ID> <FIELD> <VALUE>
+job upt 1 title "Senior Python Developer"
+job upt 1 location "Remote"
+
+# Available fields: title, company, location, deadline, department,
+# hiring_manager, job_posting_url, github_repo, github_issue_number
 ```
 
 ## Architecture
