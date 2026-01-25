@@ -34,17 +34,17 @@ job export -o jobs.json
 
 ```bash
 # Assess a job against your CV and experience
-job fit 42 --cv cv.pdf --extra persona.md --extra experience.md
+job fit 42 --cv cv.pdf --extra experience.md --extra letter.toml
 
 # View saved assessments
-job fit view --id 1
+job fit view 1
 ```
 
 **5. GitHub Integration** – Create issues and post assessments
 
 ```bash
 # Create GitHub issue from job
-job gh issue --id 1 --repo owner/repo
+job gh issue -f 1 --repo owner/repo
 
 # Post assessment as comment
 job gh comment -a 5 --repo owner/repo --issue 12
@@ -193,11 +193,11 @@ Convert job postings into GitHub issues for tracking:
 
 ```bash
 # Create issue from job
-job gh issue --id 1 --repo owner/repo
-job gh i --url https://example.com/job --repo owner/repo
+job gh issue -f 1 --repo owner/repo
+job gh issue -f 1  # uses repo from config
 
 # Recreate issue (if already posted)
-job gh issue --id 1 --repo owner/repo --force
+job gh issue -f 1 --repo owner/repo --force
 ```
 
 **What gets posted:**
@@ -236,7 +236,7 @@ job gh comment -a 5 --issue 12
 job add https://example.com/senior-engineer
 
 # 2. Create GitHub issue
-job gh issue --id 1 --repo myuser/job-hunt
+job gh issue -f 1 --repo myuser/job-hunt
 
 # 3. Assess fit
 job fit 1 --cv cv.toml
@@ -254,7 +254,7 @@ job gh comment -a 2
 ### Aliases
 
 ```bash
-job gh i --id 1 --repo x/y    # issue
+job gh i -f 1 --repo x/y      # issue
 job gh c -a 5                 # comment
 ```
 
@@ -262,16 +262,16 @@ job gh c -a 5                 # comment
 
 Generate tailored CVs and cover letters using AI, with automatic updates to your source files.
 
-### Generating Documents
+### Drafting Documents
 
 ```bash
-# Generate both CV and cover letter for a job
+# Draft both CV and cover letter for a job
 job app write 42 --cv cv.toml --letter letter.toml
 
-# Generate CV only
+# Draft CV only
 job app write 42 --no-letter
 
-# Generate cover letter only
+# Draft cover letter only
 job app write 42 --no-cv
 
 # Add context files for better personalization
@@ -287,7 +287,7 @@ job app write 42 --cv cv.toml --no-apply
 # 1. Add a job to your database
 job add https://example.com/senior-engineer
 
-# 2. Generate tailored application documents
+# 2. Draft tailored application documents
 job app write 1 --cv cv.toml --letter letter.toml
 # → AI analyzes job requirements and your background
 # → Generates tailored CV highlighting relevant experience
@@ -414,8 +414,8 @@ The CLI searches for `job.toml` in these locations (first found wins):
 
 ```bash
 # job.toml: [job.gh] repo = "xrsl/cv"
-job gh issue --id 2  # Uses xrsl/cv from config
-job gh issue --id 2 --repo other/repo  # Override with CLI flag
+job gh issue -f 2  # Uses xrsl/cv from config
+job gh issue -f 2 --repo other/repo  # Override with CLI flag
 ```
 
 **Use fit defaults:**
@@ -431,7 +431,6 @@ job fit 1 --extra personal.md  # Merges with config
 ```bash
 # job.toml: [job.add] structured = true, browser = true
 job add https://example.com/job  # Uses structured + browser from config
-job add https://example.com/job --no-structured  # Override
 ```
 
 ## Environment
@@ -448,48 +447,48 @@ job add https://example.com/job --no-structured  # Override
 ### Job Management
 
 ```bash
-job search [--company NAME] [--keyword KW] [--extra KW]
-job add <url> [--model MODEL] [--no-cache]
+job search [--company NAME] [--keyword KW] [--extra KW] [--since DAYS]
+job add <URL> [--structured] [--browser] [--model MODEL]
+job add --from-issue <NUM>
 job list
-job query <query>
-job view <url>
-job export [IDENTIFIER] [-o FILE] [--query FILTER]
-job info
-job del <url>
+job query <QUERY>
+job view <ID|URL>
+job export [ID|URL] [-o FILE] [-q QUERY]
+job del <ID|URL>
 ```
 
 ### Fit Assessment
 
 ```bash
 # Assess fit
-job fit <ID> --cv <PATH> [--extra <PATH>] [--model MODEL]
+job fit <JOB_ID> --cv <PATH> [--extra <PATH>] [--model MODEL]
 
 # View assessments
-job fit view -i <JOB_ID>          # List all for job
-job fit view -a <ASSESSMENT_ID>   # View specific
+job fit view <JOB_ID>             # List all for job
+job fit view <JOB_ID> -i <NUM>    # View specific assessment
 
 # Delete assessments
-job fit del -a <ASSESSMENT_ID>     # Delete one
-job fit del -i <JOB_ID>            # Delete all for job
+job fit del <JOB_ID>              # Delete all for job
+job fit del <JOB_ID> -i <NUM>     # Delete specific assessment
 
 # Aliases: f (fit), v (view)
 job f 1 --cv cv.toml -e persona.md
-job f v -a 5
+job f v 1 -i 5
 ```
 
 ### GitHub Integration
 
 ```bash
 # Create issue from job
-job gh issue --id <ID> --repo <OWNER/REPO>
-job gh issue --url <URL> --repo <OWNER/REPO>
+job gh issue -f <JOB_ID> --repo <OWNER/REPO>
+job gh issue -f <JOB_ID>  # uses repo from config
 
 # Post assessment as comment
 job gh comment -a <ASSESSMENT_ID> --repo <OWNER/REPO> --issue <NUM>
 job gh comment -a <ASSESSMENT_ID>  # auto-detect repo/issue
 
 # Aliases: i (issue), c (comment)
-job gh i --id 1 --repo user/repo
+job gh i -f 1 --repo user/repo
 job gh c -a 5
 ```
 
