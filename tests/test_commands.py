@@ -103,3 +103,9 @@ def test_export_invalid_id(prepopulated_db):
     result = runner.invoke(app, ["export", "999"])
     assert result.exit_code == 1
     assert "No job found" in result.output
+
+
+def test_app_list_no_drafts(prepopulated_db):
+    result = runner.invoke(app, ["app", "list"])
+    assert result.exit_code == 0
+    assert "No application drafts found" in result.output
