@@ -29,10 +29,6 @@
 # browser = false    # Use browser fetching by default
 # model = "gemini-2.5-flash"  # Override model for add command
 
-# Export command defaults
-[job.export]
-# output-format = "json"  # Default export format
-
 # Job search configuration
 [job.search]
 keywords = [
