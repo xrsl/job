@@ -31,6 +31,7 @@
 
 # Job search configuration
 [job.search]
+parallel = true
 keywords = [
   "python",
   "backend",
