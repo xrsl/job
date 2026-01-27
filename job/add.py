@@ -142,12 +142,15 @@ def _build_job_data(
     return job_data
 
 
-def fetch_github_issue(issue_number: int, ctx: AppContext) -> dict:
+def fetch_github_issue(
+    issue_number: int, ctx: AppContext, repo: str | None = None
+) -> dict:
     """Fetch GitHub issue details using gh CLI.
 
     Args:
         issue_number: The GitHub issue number
         ctx: Application context
+        repo: Optional GitHub repository (owner/repo format)
 
     Returns:
         Dict with issue data (title, body, url, etc.)
@@ -156,15 +159,21 @@ def fetch_github_issue(issue_number: int, ctx: AppContext) -> dict:
         typer.Exit: If issue fetch fails
     """
     try:
+        cmd = [
+            "gh",
+            "issue",
+            "view",
+            str(issue_number),
+            "--json",
+            "title,body,url,author",
+        ]
+
+        # Add repo flag if specified
+        if repo:
+            cmd.extend(["--repo", repo])
+
         result = subprocess.run(
-            [
-                "gh",
-                "issue",
-                "view",
-                str(issue_number),
-                "--json",
-                "title,body,url,author",
-            ],
+            cmd,
             capture_output=True,
             text=True,
         )
@@ -231,6 +240,7 @@ def _build_job_data_from_issue(
     structured: bool,
     ctx: AppContext,
     model: str | None = None,
+    repo: str | None = None,
 ) -> dict:
     """Build job data dict from GitHub issue.
 
@@ -238,15 +248,18 @@ def _build_job_data_from_issue(
         issue_number: GitHub issue number
         structured: If True, use AI to extract structured fields
         ctx: Application context
+        model: Optional model name for AI extraction
+        repo: Optional GitHub repository (owner/repo format)
 
     Returns:
         Dict with job data ready for database insertion
     """
     # Fetch issue data
+    repo_display = f" from {repo}" if repo else ""
     with console.status(
-        f"[bold dim]Fetching GitHub issue #{issue_number}...[/bold dim]"
+        f"[bold dim]Fetching GitHub issue #{issue_number}{repo_display}...[/bold dim]"
     ):
-        issue_data = fetch_github_issue(issue_number, ctx)
+        issue_data = fetch_github_issue(issue_number, ctx, repo=repo)
 
     title = issue_data["title"]
     body = issue_data["body"]
@@ -289,6 +302,11 @@ def add(
     from_issue: int = typer.Option(
         None, "--from-issue", "-i", help="GitHub issue number to create job from"
     ),
+    repo: str = typer.Option(
+        None,
+        "--repo",
+        help="GitHub repository (owner/repo format) for --from-issue (from config if not specified)",
+    ),
     structured: bool = typer.Option(
         None,
         "--structured",
@@ -320,6 +338,7 @@ def add(
         job add https://example.com/job --structured
         job add https://example.com/job  # uses defaults from job.toml
         job add --from-issue 45
+        job add --from-issue 87 --repo xrsl/cv
     """
     app_ctx: AppContext = ctx.obj
 
@@ -340,9 +359,12 @@ def add(
 
     if from_issue:
         # Handle GitHub issue case
+        # Use repo from CLI or fall back to config
+        final_repo = repo or getattr(app_ctx.config.gh, "repo", None)
+
         app_ctx.logger.debug(f"Processing GitHub issue: {from_issue}")
         job_data = _build_job_data_from_issue(
-            from_issue, final_structured, app_ctx, model=final_model
+            from_issue, final_structured, app_ctx, model=final_model, repo=final_repo
         )
         final_url = job_data["job_posting_url"]  # Extract URL from issue
     else:
