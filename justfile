@@ -152,8 +152,8 @@ release-push type:
 alias t := test
 
 # Run tests with pytest
-test:
-    uv run pytest
+test +FLAGS='-q': && clean
+    uv run pytest {{ FLAGS }}
 
 # Run tests with coverage report
 test-cov:
