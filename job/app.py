@@ -1,16 +1,19 @@
 import typer
-from functools import cache
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from sqlmodel import Session, desc, select
-from pydantic_ai import Agent
-from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
-from pydantic import ValidationError
 
-from job.core import AppContext, JobAd, JobAppDraft, JobAppDraftBase
-from job.utils import error
+from job.core import AppContext, JobAd, JobAppDraft
+from job.core.agents import create_app_agent
+from job.utils import (
+    DATETIME_FORMAT,
+    error,
+    get_or_exit,
+    handle_ai_errors,
+    read_context_files,
+)
 
 console = Console()
 
@@ -19,86 +22,6 @@ app = typer.Typer(
     no_args_is_help=True,
     help="Write/manage application documents with ai",
 )
-
-
-@cache
-def load_prompt(prompt_name: str) -> str:
-    """Load prompt from markdown file.
-
-    Args:
-        prompt_name: Name of the prompt file (without .md extension)
-
-    Returns:
-        Content of the prompt file
-
-    Raises:
-        FileNotFoundError: If prompt file doesn't exist
-    """
-    prompt_path = Path(__file__).parent / "prompts" / f"{prompt_name}.md"
-
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
-
-    return prompt_path.read_text(encoding="utf-8")
-
-
-@cache
-def create_app_agent(model: str) -> Agent[None, JobAppDraftBase]:
-    """Create and cache an application writer agent for the given model.
-
-    Args:
-        model: Model name (e.g., 'gemini-2.5-flash', 'claude-sonnet-4.5')
-
-    Returns:
-        Configured PydanticAI agent
-    """
-    system_prompt = load_prompt("application-writer")
-
-    return Agent(
-        model=model,
-        output_type=JobAppDraftBase,
-        system_prompt=system_prompt,
-    )
-
-
-def read_context_files(context_paths: list[str]) -> str:
-    """Read multiple context files and combine their contents.
-
-    Args:
-        context_paths: List of file paths to read
-
-    Returns:
-        Combined content of all files
-
-    Raises:
-        typer.Exit: If any path cannot be read
-    """
-    combined_content = []
-
-    for path_str in context_paths:
-        path = Path(path_str).expanduser()
-
-        if not path.exists():
-            error(f"File not found: {path}")
-            raise typer.Exit(1)
-
-        if not path.is_file():
-            error(f"Path is not a file: {path}")
-            raise typer.Exit(1)
-
-        try:
-            content = path.read_text(encoding="utf-8")
-            combined_content.append(f"=== {path.name} ===\n{content}\n")
-        except UnicodeDecodeError:
-            console.print(
-                f"[dim]Skipped binary file: {path.name}[/dim]", style="yellow"
-            )
-            continue
-        except Exception as e:
-            error(f"Failed to read {path}: {e}")
-            raise typer.Exit(1)
-
-    return "\n".join(combined_content)
 
 
 def read_source_file(path: str) -> dict:
@@ -305,10 +228,7 @@ def list_drafts(
         # Build query based on job_id
         if job_id is not None:
             # Verify job exists
-            job = session.get(JobAd, job_id)
-            if not job:
-                error(f"No job found with ID: {job_id}")
-                raise typer.Exit(1)
+            job = get_or_exit(session, JobAd, job_id, "job")
 
             # Get all drafts for this job
             drafts = session.exec(
@@ -378,7 +298,7 @@ def list_drafts(
                 table.add_row(
                     str(draft.job_id),
                     str(draft.id),
-                    draft.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    draft.created_at.strftime(DATETIME_FORMAT),
                     draft.model_name,
                     has_cv,
                     has_letter,
@@ -387,7 +307,7 @@ def list_drafts(
             else:
                 table.add_row(
                     str(draft.id),
-                    draft.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    draft.created_at.strftime(DATETIME_FORMAT),
                     draft.model_name,
                     has_cv,
                     has_letter,
@@ -444,10 +364,7 @@ def write(
 
     # Get job from database
     with Session(app_ctx.engine) as session:
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
+        job = get_or_exit(session, JobAd, job_id, "job")
 
         # Determine model (CLI > app-specific config > global config)
         final_model = app_ctx.config.get_model(
@@ -556,21 +473,9 @@ def write(
         with console.status(
             f"[bold dim]Generating application with {final_model}...[/bold dim]"
         ):
-            try:
+            with handle_ai_errors("generate application"):
                 result = agent.run_sync(prompt)
                 draft_data = result.output
-            except ValidationError as e:
-                error(f"AI returned invalid data: {e}")
-                raise typer.Exit(1)
-            except UnexpectedModelBehavior as e:
-                error(f"AI model behaved unexpectedly: {e}")
-                raise typer.Exit(1)
-            except ModelRetry as e:
-                error(f"AI model failed after retries: {e}")
-                raise typer.Exit(1)
-            except Exception as e:
-                error(f"Failed to generate application: {e}")
-                raise typer.Exit(1)
 
         # Store draft
         draft = JobAppDraft(
@@ -651,10 +556,7 @@ def view(
             target_draft_id = id_arg
 
         # Get draft
-        draft = session.get(JobAppDraft, target_draft_id)
-        if not draft:
-            error(f"No draft found with ID: {target_draft_id}")
-            raise typer.Exit(1)
+        draft = get_or_exit(session, JobAppDraft, target_draft_id, "draft")
 
         # If job ID was provided, verify it matches
         if job_verification_id is not None and draft.job_id != job_verification_id:
@@ -664,11 +566,7 @@ def view(
             raise typer.Exit(1)
 
         # Get job info from the draft
-        job = session.get(JobAd, draft.job_id)
-        if not job:
-            # Should not happen given foreign key, but good to check
-            error(f"Job not found for draft {target_draft_id} (Job ID: {draft.job_id})")
-            raise typer.Exit(1)
+        job = get_or_exit(session, JobAd, draft.job_id, "job")
 
         # Display header
         console.print()
@@ -685,7 +583,7 @@ def view(
         console.print(
             Panel(
                 f"[bold]Model:[/bold] {draft.model_name}\n"
-                f"[bold]Created:[/bold] {draft.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"[bold]Created:[/bold] {draft.created_at.strftime(DATETIME_FORMAT)}\n"
                 f"[bold]Draft ID:[/bold] {draft.id}",
                 title="Draft Metadata",
                 border_style="dim",
@@ -777,17 +675,11 @@ def delete_drafts(
 
     with Session(app_ctx.engine) as session:
         # Verify job exists
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
+        job = get_or_exit(session, JobAd, job_id, "job")
 
         if draft_id is not None:
             # Delete specific draft
-            draft = session.get(JobAppDraft, draft_id)
-            if not draft:
-                error(f"No draft found with ID: {draft_id}")
-                raise typer.Exit(1)
+            draft = get_or_exit(session, JobAppDraft, draft_id, "draft")
 
             # Verify draft belongs to job
             if draft.job_id != job_id:

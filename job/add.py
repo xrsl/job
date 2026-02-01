@@ -2,15 +2,12 @@ import json
 import re
 import subprocess
 import typer
-from functools import cache
 from sqlmodel import Session, select
 from rich.console import Console
-from pydantic_ai import Agent
-from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
-from pydantic import ValidationError
 
 from job.core import AppContext, JobAd, JobAdBase
-from job.utils import error, validate_url
+from job.core.agents import create_agent
+from job.utils import error, handle_ai_errors, validate_url
 from job.fetchers import BrowserFetcher, StaticFetcher
 from job.fetchers.base import FetchResult
 
@@ -18,16 +15,6 @@ console = Console()
 
 # Create sub-app for add commands
 app = typer.Typer()
-
-
-@cache
-def create_agent(model: str, system_prompt: str) -> Agent[None, JobAdBase]:
-    """Create and cache an AI agent for the given model."""
-    return Agent(
-        model=model,
-        output_type=JobAdBase,
-        system_prompt=system_prompt,
-    )
 
 
 def fetch_job_text(url: str, ctx: AppContext, use_browser: bool = False) -> FetchResult:
@@ -81,23 +68,11 @@ def extract_job_info(
     model_name = ctx.config.get_model(model)
     agent = create_agent(model_name, ctx.config.SYSTEM_PROMPT)
 
-    try:
+    with handle_ai_errors("extract job info"):
         result = agent.run_sync(
             f"Extract job info from this posting.\nURL: {url}\n\nJob text:\n{job_text}"
         )
         return result.output
-    except ValidationError as e:
-        error(f"AI returned invalid data: {e}")
-        raise typer.Exit(1)
-    except UnexpectedModelBehavior as e:
-        error(f"AI model behaved unexpectedly: {e}")
-        raise typer.Exit(1)
-    except ModelRetry as e:
-        error(f"AI model failed after retries: {e}")
-        raise typer.Exit(1)
-    except Exception as e:
-        error(f"Failed to extract job info: {e}")
-        raise typer.Exit(1)
 
 
 def _build_job_data(

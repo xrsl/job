@@ -4,14 +4,13 @@ import pytest
 from click.exceptions import Exit
 from unittest.mock import patch
 from job.app import (
-    load_prompt,
-    create_app_agent,
-    read_context_files,
     read_source_file,
     _write_source_file,
     _apply_draft_to_files,
 )
+from job.utils import read_context_files
 from job.core import JobAppDraft
+from job.core.agents import load_prompt, create_app_agent
 
 
 def test_load_prompt_success():
@@ -29,7 +28,7 @@ def test_load_prompt_file_not_found():
         load_prompt("non-existent")
 
 
-@patch("job.app.load_prompt")
+@patch("job.core.agents.load_prompt")
 def test_create_app_agent(mock_load_prompt):
     """Test creating an app agent."""
     mock_load_prompt.return_value = "Test prompt"

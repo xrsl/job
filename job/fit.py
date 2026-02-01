@@ -1,106 +1,27 @@
 import json
 import typer
-from functools import cache
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from sqlmodel import Session, desc, select
-from pydantic_ai import Agent
-from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
-from pydantic import ValidationError
 
 from job.core import AppContext, JobAd, JobFitAssessment, JobFitAssessmentBase
-from job.utils import error
+from job.core.agents import create_fit_agent
+from job.utils import (
+    DATETIME_FORMAT,
+    error,
+    get_or_exit,
+    get_score_color,
+    get_score_style,
+    handle_ai_errors,
+    parse_json_or_list,
+    read_context_files,
+)
 
 console = Console()
 
 # Create sub-app for fit commands
 app = typer.Typer(no_args_is_help=True, help="Assess job fit with ai (Alias: f)")
-
-
-@cache
-def load_prompt(prompt_name: str) -> str:
-    """Load prompt from markdown file.
-
-    Args:
-        prompt_name: Name of the prompt file (without .md extension)
-
-    Returns:
-        Content of the prompt file
-
-    Raises:
-        FileNotFoundError: If prompt file doesn't exist
-    """
-    prompt_path = Path(__file__).parent / "prompts" / f"{prompt_name}.md"
-
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
-
-    return prompt_path.read_text(encoding="utf-8")
-
-
-def read_context_files(context_paths: list[str]) -> tuple[str, list[str]]:
-    """Read multiple context files and combine their contents.
-
-    Supports individual files only (any file type including PDFs).
-
-    Args:
-        context_paths: List of file paths to read
-
-    Returns:
-        Tuple of (combined_content, valid_paths)
-
-    Raises:
-        typer.Exit: If any path cannot be read
-    """
-    combined_content = []
-    valid_paths = []
-
-    for path_str in context_paths:
-        path = Path(path_str).expanduser()
-
-        if not path.exists():
-            error(f"File not found: {path}")
-            raise typer.Exit(1)
-
-        if not path.is_file():
-            error(f"Path is not a file: {path}")
-            raise typer.Exit(1)
-
-        try:
-            content = path.read_text(encoding="utf-8")
-            combined_content.append(f"=== {path.name} ===\n{content}\n")
-            valid_paths.append(str(path.absolute()))
-        except UnicodeDecodeError:
-            # For binary files (like PDFs), skip with a note
-            console.print(
-                f"[dim]Skipped binary file: {path.name}[/dim]", style="yellow"
-            )
-            continue
-        except Exception as e:
-            error(f"Failed to read {path}: {e}")
-            raise typer.Exit(1)
-
-    return "\n".join(combined_content), valid_paths
-
-
-@cache
-def create_fit_agent(model: str) -> Agent[None, JobFitAssessmentBase]:
-    """Create and cache a career advisor agent for the given model.
-
-    Args:
-        model: Model name (e.g., 'gemini-2.5-flash', 'claude-sonnet-4.5')
-
-    Returns:
-        Configured PydanticAI agent
-    """
-    system_prompt = load_prompt("career-advisor")
-
-    return Agent(
-        model=model,
-        output_type=JobFitAssessmentBase,
-        system_prompt=system_prompt,
-    )
 
 
 def display_fit_assessment(
@@ -123,12 +44,12 @@ def display_fit_assessment(
     # Show metadata if this is a stored assessment
     if isinstance(assessment, JobFitAssessment):
         console.print()
-        context_files = json.loads(assessment.context_file_paths)
+        context_files = parse_json_or_list(assessment.context_file_paths)
         context_display = "\n".join([f"  • {Path(p).name}" for p in context_files])
         console.print(
             Panel(
                 f"[bold]Model:[/bold] {assessment.model_name}\n"
-                f"[bold]Created:[/bold] {assessment.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"[bold]Created:[/bold] {assessment.created_at.strftime(DATETIME_FORMAT)}\n"
                 f"[bold]Context Files:[/bold]\n{context_display}",
                 title="Assessment Metadata",
                 border_style="dim",
@@ -137,18 +58,7 @@ def display_fit_assessment(
 
     # Fit Score
     score = assessment.overall_fit_score
-    if score >= 80:
-        score_style = "bold green"
-        score_label = "EXCELLENT MATCH"
-    elif score >= 60:
-        score_style = "bold yellow"
-        score_label = "GOOD MATCH"
-    elif score >= 40:
-        score_style = "bold orange"
-        score_label = "MODERATE MATCH"
-    else:
-        score_style = "bold red"
-        score_label = "POOR MATCH"
+    score_style, score_label = get_score_style(score)
 
     console.print()
     console.print(
@@ -162,12 +72,7 @@ def display_fit_assessment(
 
     # Strengths
     console.print()
-    # Handle both list (from agent) and JSON string (from database)
-    strengths = (
-        assessment.strengths
-        if isinstance(assessment.strengths, list)
-        else json.loads(assessment.strengths)
-    )
+    strengths = parse_json_or_list(assessment.strengths)
     strengths_text = "\n".join([f"• {strength}" for strength in strengths])
     console.print(
         Panel(
@@ -179,11 +84,7 @@ def display_fit_assessment(
 
     # Gaps
     console.print()
-    gaps = (
-        assessment.gaps
-        if isinstance(assessment.gaps, list)
-        else json.loads(assessment.gaps)
-    )
+    gaps = parse_json_or_list(assessment.gaps)
     gaps_text = "\n".join([f"• {gap}" for gap in gaps])
     console.print(
         Panel(
@@ -272,16 +173,15 @@ def run(
 
     # Read context files
     with console.status("[bold dim]Reading context files...[/bold dim]"):
-        context_content, context_paths = read_context_files(final_context)
+        context_content, context_paths = read_context_files(
+            final_context, return_paths=True
+        )
 
     console.print(f"[dim]Loaded {len(context_paths)} context file(s)[/dim]")
 
     # Get job from database
     with Session(app_ctx.engine) as session:
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
+        job = get_or_exit(session, JobAd, job_id, "job")
 
         # Run fit assessment
         agent = create_fit_agent(final_model)
@@ -307,21 +207,9 @@ Provide a comprehensive fit assessment."""
         with console.status(
             f"[bold dim]Analyzing fit with {final_model}...[/bold dim]"
         ):
-            try:
+            with handle_ai_errors("assess fit"):
                 result = agent.run_sync(prompt)
                 assessment = result.output
-            except ValidationError as e:
-                error(f"AI returned invalid data: {e}")
-                raise typer.Exit(1)
-            except UnexpectedModelBehavior as e:
-                error(f"AI model behaved unexpectedly: {e}")
-                raise typer.Exit(1)
-            except ModelRetry as e:
-                error(f"AI model failed after retries: {e}")
-                raise typer.Exit(1)
-            except Exception as e:
-                error(f"Failed to assess fit: {e}")
-                raise typer.Exit(1)
 
         # Store assessment
         fit_record = JobFitAssessment(
@@ -369,17 +257,13 @@ def view(
 
     with Session(app_ctx.engine) as session:
         # Get the job first
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
+        job = get_or_exit(session, JobAd, job_id, "job")
 
         # If assessment_id is provided, view that specific one for this job
         if assessment_id is not None:
-            assessment = session.get(JobFitAssessment, assessment_id)
-            if not assessment:
-                error(f"No assessment found with ID: {assessment_id}")
-                raise typer.Exit(1)
+            assessment = get_or_exit(
+                session, JobFitAssessment, assessment_id, "assessment"
+            )
 
             # Verify the assessment belongs to this job
             if assessment.job_id != job_id:
@@ -429,24 +313,18 @@ def view(
 
         for assessment in assessments:
             # Parse context files for display
-            context_files = json.loads(assessment.context_file_paths)
+            context_files = parse_json_or_list(assessment.context_file_paths)
             context_display = ", ".join([Path(p).name for p in context_files])
             if len(context_display) > 37:
                 context_display = context_display[:34] + "..."
 
             # Color code score
-            if assessment.overall_fit_score >= 80:
-                score_display = f"[green]{assessment.overall_fit_score}[/green]"
-            elif assessment.overall_fit_score >= 60:
-                score_display = f"[yellow]{assessment.overall_fit_score}[/yellow]"
-            elif assessment.overall_fit_score >= 40:
-                score_display = f"[orange1]{assessment.overall_fit_score}[/orange1]"
-            else:
-                score_display = f"[red]{assessment.overall_fit_score}[/red]"
+            color = get_score_color(assessment.overall_fit_score)
+            score_display = f"[{color}]{assessment.overall_fit_score}[/{color}]"
 
             table.add_row(
                 str(assessment.id),
-                assessment.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                assessment.created_at.strftime(DATETIME_FORMAT),
                 assessment.model_name,
                 score_display,
                 context_display,
@@ -508,10 +386,7 @@ def list_assessments(
         # Build query
         if job_id is not None:
             # Verify job exists
-            job = session.get(JobAd, job_id)
-            if not job:
-                error(f"No job found with ID: {job_id}")
-                raise typer.Exit(1)
+            job = get_or_exit(session, JobAd, job_id, "job")
 
             # Get assessments for this job
             assessments = session.exec(
@@ -566,14 +441,8 @@ def list_assessments(
 
         for assessment in assessments:
             # Color code score
-            if assessment.overall_fit_score >= 80:
-                score_display = f"[green]{assessment.overall_fit_score}[/green]"
-            elif assessment.overall_fit_score >= 60:
-                score_display = f"[yellow]{assessment.overall_fit_score}[/yellow]"
-            elif assessment.overall_fit_score >= 40:
-                score_display = f"[orange1]{assessment.overall_fit_score}[/orange1]"
-            else:
-                score_display = f"[red]{assessment.overall_fit_score}[/red]"
+            color = get_score_color(assessment.overall_fit_score)
+            score_display = f"[{color}]{assessment.overall_fit_score}[/{color}]"
 
             if job_id is None:
                 # Get job info for this assessment
@@ -587,7 +456,7 @@ def list_assessments(
                 table.add_row(
                     str(assessment.job_id),
                     str(assessment.id),
-                    assessment.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    assessment.created_at.strftime(DATETIME_FORMAT),
                     assessment.model_name,
                     score_display,
                     job_title,
@@ -595,7 +464,7 @@ def list_assessments(
             else:
                 table.add_row(
                     str(assessment.id),
-                    assessment.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    assessment.created_at.strftime(DATETIME_FORMAT),
                     assessment.model_name,
                     score_display,
                 )
@@ -630,17 +499,13 @@ def delete_assessments(
 
     with Session(app_ctx.engine) as session:
         # First verify job exists
-        job = session.get(JobAd, job_id)
-        if not job:
-            error(f"No job found with ID: {job_id}")
-            raise typer.Exit(1)
+        job = get_or_exit(session, JobAd, job_id, "job")
 
         if assessment_id is not None:
             # Delete specific assessment for this job
-            assessment = session.get(JobFitAssessment, assessment_id)
-            if not assessment:
-                error(f"No assessment found with ID: {assessment_id}")
-                raise typer.Exit(1)
+            assessment = get_or_exit(
+                session, JobFitAssessment, assessment_id, "assessment"
+            )
 
             # Verify the assessment belongs to this job
             if assessment.job_id != job_id:

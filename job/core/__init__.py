@@ -12,12 +12,9 @@ from job.core.models import (
     JobFitAssessmentBase,
 )
 
-# Backwards compatibility alias
-Config = Settings
 
 __all__ = [
     "Settings",
-    "Config",  # Backwards compatibility
     "AppContext",
     "JobAd",
     "JobAdBase",

@@ -1,6 +1,5 @@
 """GitHub integration commands."""
 
-import json
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -11,32 +10,12 @@ from rich.console import Console
 from sqlmodel import Session
 
 from job.core import AppContext, JobAd, JobFitAssessment
-from job.utils import error
+from job.utils import DATETIME_FORMAT, error, get_or_exit, parse_json_or_list
 
 console = Console()
 
 # Create sub-app for GitHub commands
 app = typer.Typer(no_args_is_help=True, help="GitHub integration commands")
-
-
-def get_job_by_id(session: Session, job_id: int) -> JobAd:
-    """Get job from database by ID.
-
-    Args:
-        session: Database session
-        job_id: Job ID
-
-    Returns:
-        JobAd instance
-
-    Raises:
-        typer.Exit: If job not found
-    """
-    job = session.get(JobAd, job_id)
-    if not job:
-        error(f"No job found with ID: {job_id}")
-        raise typer.Exit(1)
-    return job
 
 
 @app.command(name="i", hidden=True, no_args_is_help=True)
@@ -74,7 +53,7 @@ def issue(
 
     with Session(app_ctx.engine) as session:
         # Get the job
-        job = get_job_by_id(session, from_job)
+        job = get_or_exit(session, JobAd, from_job, "job")
 
         # Check if already posted
         if job.github_issue_number is not None and not force:
@@ -188,16 +167,10 @@ def comment(
 
     with Session(app_ctx.engine) as session:
         # Get the assessment
-        assessment = session.get(JobFitAssessment, assessment_id)
-        if not assessment:
-            error(f"No assessment found with ID: {assessment_id}")
-            raise typer.Exit(1)
+        assessment = get_or_exit(session, JobFitAssessment, assessment_id, "assessment")
 
         # Get the job
-        job = session.get(JobAd, assessment.job_id)
-        if not job:
-            error(f"Job not found for assessment {assessment_id}")
-            raise typer.Exit(1)
+        job = get_or_exit(session, JobAd, assessment.job_id, "job")
 
         # Auto-detect repo and issue from job metadata if not provided
         final_repo = repo or job.github_repo
@@ -218,12 +191,12 @@ def comment(
             raise typer.Exit(1)
 
         # Format assessment as markdown
-        context_files = json.loads(assessment.context_file_paths)
+        context_files = parse_json_or_list(assessment.context_file_paths)
         context_display = ", ".join([Path(p).name for p in context_files])
 
         # Parse strengths and gaps
-        strengths = json.loads(assessment.strengths)
-        gaps = json.loads(assessment.gaps)
+        strengths = parse_json_or_list(assessment.strengths)
+        gaps = parse_json_or_list(assessment.gaps)
 
         # Build markdown comment
         markdown = f"""## Job Fit Assessment
@@ -268,7 +241,7 @@ def comment(
 <summary>Assessment Details</summary>
 
 **Model:** {assessment.model_name}
-**Created:** {assessment.created_at.strftime("%Y-%m-%d %H:%M:%S")}
+**Created:** {assessment.created_at.strftime(DATETIME_FORMAT)}
 **Context:** {context_display}
 **Assessment ID:** {assessment_id}
 
